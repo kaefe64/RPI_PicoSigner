@@ -1,0 +1,35 @@
+.program image
+.wrap_target
+start_frame:
+    wait 1 pin 10        ; Espera VSYNC=22-base=10 alto (início do frame)
+    wait 0 pin 10        ; Espera VSYNC=22-base=10 baixo (fim do pulso)
+next_line:
+    wait 1 pin 9         ; Espera HREF=21-base=9 alto (início da linha)
+line_loop:
+    wait 1 pin 14        ; Espera PCLK=26-base=14 alto
+    in pins, 8           ; Lêa partir de base D0..D7 (GPIO12..GPIO19)
+    wait 0 pin 14        ; Espera PCLK=26-base=14 baixo
+
+    wait 1 pin 14        ; Espera PCLK=26-base=14 alto
+    in pins, 8           ; Lêa partir de base D0..D7 (GPIO12..GPIO19)
+    wait 0 pin 14        ; Espera PCLK=26-base=14 baixo
+
+    jmp pin line_loop    ; Continua enquanto HREF esta alto
+    jmp next_line        ; Quando HREF cai, volta pro frame
+.wrap
+
+% c-sdk {
+void image_program_init(PIO pio, uint sm, uint offset, uint pin_base) 
+{
+    // Pinos de dados (entrada) = GPIO12..GPIO26
+    pio_sm_set_consecutive_pindirs(pio, sm, pin_base, 15, false);  //15 pinos a partir de base ficam entrada 
+    pio_sm_config c = image_program_get_default_config(offset);
+    sm_config_set_in_pins(&c, pin_base); // pinos usados no pio = (base..base+31)
+    sm_config_set_jmp_pin(&c, 21);    // HREF usado no jmp pin
+    sm_config_set_in_shift(&c, false, true, 16);  //config, shift_right, autopush, push threshold
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
+
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}
