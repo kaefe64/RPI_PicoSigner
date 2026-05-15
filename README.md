@@ -41,14 +41,13 @@ At this point, the project is already capable of reading data from the camera, s
 
 ## Software
 It uses the Arduino IDE to compile.
-Board: Arduino Raspberry Pi Pico/RP2040/RP2350 by  Earle F. Philhower, III
-       Raspberry Pi Pico
+ - Board: Arduino Raspberry Pi Pico/RP2040/RP2350 by  Earle F. Philhower, III / Raspberry Pi Pico<br>
 Arduino Libraries used: 
  - Crypto by Rhys Weatherley
  - QRCode by Richard Moore
  - TFT_eSPI by Bodmer
 
-Warning must be ignored (display without touch):
+Warning must be ignored (display without touch):<br>
 #warning >>>>------>> TOUCH_CS pin not defined, TFT_eSPI touch functions will not be available!
 
 ## Main menu for test
@@ -56,11 +55,13 @@ Warning must be ignored (display without touch):
 
 ## It can read QR code
 As debug, It sends the QR code read through serial.<br>
+<br>
 ![PicoSigner](Files/RPI_PicoSigner_QRcode_scan.jpg)
 
 
-## It can read QR code
+## Camera quality
 Camera example with faint colors, but good to read the QR code.<br>
+<br>
 ![PicoSigner](Files/RPI_PicoSigner_like.jpg)
 
 
@@ -75,7 +76,7 @@ Camera example with faint colors, but good to read the QR code.<br>
 ## It can generate QR code output result
 ![PicoSigner](Files/RPI_PicoSigner_QRcode_out.jpg)
 
-
+<br>
 
 ## Have fun
 As it stands, the project can already serve as a reference or as a foundation for someone who wants to improve it.<br>
