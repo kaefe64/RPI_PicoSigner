@@ -44,10 +44,10 @@ It uses the Arduino IDE to compile.
  - Board: Arduino Raspberry Pi Pico/RP2040/RP2350 by  Earle F. Philhower, III / Raspberry Pi Pico<br>
 <br>
 Arduino Libraries used:<br>
- - Crypto by Rhys Weatherley
- - QRCode by Richard Moore
- - TFT_eSPI by Bodmer
-
+ - Crypto by Rhys Weatherley<br>
+ - QRCode by Richard Moore<br>
+ - TFT_eSPI by Bodmer<br>
+<br>
 Warning must be ignored (display without touch):<br>
 #warning >>>>------>> TOUCH_CS pin not defined, TFT_eSPI touch functions will not be available!<br>
 <br>
