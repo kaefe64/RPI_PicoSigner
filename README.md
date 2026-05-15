@@ -1,10 +1,10 @@
 # RPI_PicoSigner
 # Airgapped Bitcoin transaction signing device
 # Using RPI Pico RP2040, OV7670 and ST7789
-# ** NOT FINISHED **
+# ** Not finished **
 ## by Klaus Fensterseifer - PY2KLA
 
-![PicoSigner](Files/IamPadUSB.jpg)
+![PicoSigner](Files/RPI_PicoSigner0.jpg)
 <br>
 <br>
 This project is an attempt to create a Bitcoin transaction signing device similar to SeedSigner (https://github.com/SeedSigner/seedsigner), but using a Raspberry Pi Pico without access to Wi-Fi, Bluetooth, or any other means of communication besides a wired USB connection.<br>
@@ -29,7 +29,15 @@ At this point, the project is already capable of reading data from the camera, s
 
 
 ## PicoSigner schematic
-![PicoSigner](Files/IamPadUSB.jpg)
+![PicoSigner](Files/Pico_OV7670_ST7789.jpg)
+
+
+## PicoSigner top (ugly assembly)
+![PicoSigner](Files/RPI_PicoSigner_top.jpg)
+
+## PicoSigner botton (ugly assembly)
+![PicoSigner](Files/RPI_PicoSigner_bot.jpg)
+
 
 ## Software
 It uses the Arduino IDE to compile.
@@ -43,16 +51,30 @@ Arduino Libraries used:
 Warning must be ignored (display without touch):
 #warning >>>>------>> TOUCH_CS pin not defined, TFT_eSPI touch functions will not be available!
 
+## Main menu for test
+![PicoSigner](Files/RPI_PicoSigner_menu.jpg)
+
 ## It can read QR code
 As debug, It sends the QR code read through serial.<br>
+![PicoSigner](Files/RPI_PicoSigner_QRcode_scan.jpg)
+
+
+## It can read QR code
+Camera example with faint colors, but good to read the QR code.<br>
+![PicoSigner](Files/RPI_PicoSigner_like.jpg)
 
 
 ## It can input the wallet words
+![PicoSigner](Files/RPI_PicoSigner_words.jpg)
 
 
+## It can input the wallet words by letter
+![PicoSigner](Files/RPI_PicoSigner_spy.jpg)
 
-## PicoSigner pictures
-![PicoSigner](Files/IamPadUSB.jpg)
+
+## It can generate QR code output result
+![PicoSigner](Files/RPI_PicoSigner_QRcode_out.jpg)
+
 
 
 ## Have fun
