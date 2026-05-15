@@ -9,7 +9,7 @@
 <br>
 This project is an attempt to create a Bitcoin transaction signing device similar to SeedSigner (https://github.com/SeedSigner/seedsigner), but using a Raspberry Pi Pico without access to Wi-Fi, Bluetooth, or any other means of communication besides a wired USB connection.<br>
 
-It uses an RPI Pico, an OV7670 camera, and an ST7789 display, all low-cost components.<br>
+It uses a Raspberry Pi Pico RP2040, an OV7670 camera, and an ST7789 display, all low-cost components.<br>
 
 The idea is to create a project similar to SeedSigner, but simpler.<br>
 <br>
@@ -43,7 +43,7 @@ At this point, the project is already capable of reading data from the camera, s
 It uses the Arduino IDE to compile.
  - Board: Arduino Raspberry Pi Pico/RP2040/RP2350 by  Earle F. Philhower, III / Raspberry Pi Pico<br>
 <br>
-Arduino Libraries used: 
+Arduino Libraries used:<br>
  - Crypto by Rhys Weatherley
  - QRCode by Richard Moore
  - TFT_eSPI by Bodmer
