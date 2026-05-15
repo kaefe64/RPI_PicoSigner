@@ -7,7 +7,7 @@
 ![PicoSigner](Files/RPI_PicoSigner0.jpg)
 <br>
 <br>
-This project is an attempt to create a Bitcoin transaction signing device similar to SeedSigner (https://github.com/SeedSigner/seedsigner), but using a Raspberry Pi Pico without access to Wi-Fi, Bluetooth, or any other means of communication besides a wired USB connection.<br>
+This project is an attempt to create a Bitcoin transaction signing device similar to SeedSigner (https://github.com/SeedSigner/seedsigner), but using a Raspberry Pi Pico without access to Wi-Fi, Bluetooth, or any other means of communication.<br>
 
 It uses a Raspberry Pi Pico RP2040, an OV7670 camera, and an ST7789 display, all low-cost components.<br>
 
