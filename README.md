@@ -29,7 +29,7 @@ At this point, the project is already capable of reading data from the camera, s
 
 
 ## PicoSigner schematic
-![PicoSigner](Files/Pico_OV7670_ST7789.jpg)
+![PicoSigner](Files/Pico_OV7670_ST7789.png)
 
 
 ## PicoSigner top (ugly assembly)
