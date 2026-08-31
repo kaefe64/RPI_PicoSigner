@@ -405,11 +405,12 @@ void QRCode_decode(uint16_t* rgb_image)
 //Serial.print("quirc_end "); Serial.println(millis()-t1);
 
   int num_codes = quirc_count(qr);
-  if(num_codes>0)
-  {
-    Serial.print("Quirc   num_codes = ");
-    Serial.println(num_codes);
-  }
+  //debug serial (removido)
+  //if(num_codes>0)
+  //{
+  //  Serial.print("Quirc   num_codes = ");
+  //  Serial.println(num_codes);
+  //}
 
   for (int i = 0; i < num_codes; i++) {
     quirc_decode_error_t err;
@@ -442,15 +443,16 @@ void QRCode_decode(uint16_t* rgb_image)
     }
     else
     {
-      Serial.print("Data: ");
-      for(uint16_t i=0; i<40; i++)
-      {
-        if(data.payload[i]==0)
-          break;
-        Serial.print(data.payload[i]);
-        Serial.print(" ");
-      }
-      Serial.println(" ");
+      //debug serial (removido): envio das palavras lidas via QR
+      //Serial.print("Data: ");
+      //for(uint16_t i=0; i<40; i++)
+      //{
+      //  if(data.payload[i]==0)
+      //    break;
+      //  Serial.print(data.payload[i]);
+      //  Serial.print(" ");
+      //}
+      //Serial.println(" ");
     }
   }
 }

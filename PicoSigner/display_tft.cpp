@@ -16,6 +16,7 @@ Display TFT ST7789 240x320
 #include "Cam_OV7670.h"
 #include "BitcoinWords.h"
 #include "qr_code.h"
+#include "bip84.h"
 
 
 TFT_eSPI tft = TFT_eSPI();
@@ -35,7 +36,8 @@ struct st_font
 // Used for displaying Leter board
 const struct st_font Fonts[FONTS_QTD]={ {FONT1, X_CHAR1, Y_CHAR1},
                                         {FONT2, X_CHAR2, Y_CHAR2},
-                                        {FONT3, X_CHAR3, Y_CHAR3} };
+                                        {FONT3, X_CHAR3, Y_CHAR3},
+                                        {FONT0, X_CHAR0, Y_CHAR0} };
 
 
 
@@ -44,6 +46,7 @@ const struct st_font Fonts[FONTS_QTD]={ {FONT1, X_CHAR1, Y_CHAR1},
 #define SCR_WORDS       20
 #define SCR_CAM         30
 #define SCR_QRCODE      40
+#define SCR_ADDR        50
 
 uint16_t scr = SCR_MAIN;
 
@@ -58,8 +61,14 @@ uint16_t words_len;
 
 
 //char Words[WORDS_NUM][16] = {"ab","","","","","","","","","","",""};
-char Words[WORDS_NUM][16] = {"spy", "profit", "item", "promote", "equal", "wealth", "nice", "prize", "cute", "lawsuit", "stage", "capital"};
-uint16_t Word_pos[WORDS_NUM] = {1690,	1374,	950,	1377,	608,	1985,	1195,	1370,	437,	1009,	1697,	272 };   //11 bits / word
+//char Words[WORDS_NUM][16] = {"spy", "profit", "item", "promote", "equal", "wealth", "nice", "prize", "cute", "lawsuit", "stage", "capital"};
+//uint16_t Word_pos[WORDS_NUM] = {1690,	1374,	950,	1377,	608,	1985,	1195,	1370,	437,	1009,	1697,	272 };   //11 bits / word
+
+//default de teste = vetor BIP-84 oficial (abandon x11 + about)
+char Words[WORDS_NUM][16] = {"abandon", "abandon", "abandon", "abandon", "abandon", "abandon", "abandon", "abandon", "abandon", "abandon", "abandon", "about"};
+uint16_t Word_pos[WORDS_NUM] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3 };   //11 bits / word
+
+char BtcAddress[100] = "";   //BIP-84 derived address (bc1...) or empty
 
 uint16_t lin_selec;
 uint16_t col_selec;
@@ -459,10 +468,10 @@ void displayDrawOpt(const char *s, uint16_t col, uint16_t lin, uint16_t highligh
 
 
 
-#define MAIN_OPTS  3
-const char MainOpts[MAIN_OPTS][12]=  { "Camera",  "Words", "QR Code"};
-const uint16_t MainOptsScr[MAIN_OPTS]={ SCR_CAM,  SCR_WORDS, SCR_QRCODE };
-void (*MainOptsFunc[MAIN_OPTS])(void)={ scr_cam_setup,  scr_words_setup, scr_qrcode_setup };
+#define MAIN_OPTS  4
+const char MainOpts[MAIN_OPTS][12]=  { "Camera",  "Words", "QR Code", "Address"};
+const uint16_t MainOptsScr[MAIN_OPTS]={ SCR_CAM,  SCR_WORDS, SCR_QRCODE, SCR_ADDR };
+void (*MainOptsFunc[MAIN_OPTS])(void)={ scr_cam_setup,  scr_words_setup, scr_qrcode_setup, scr_addr_setup };
                               
 
 //============================================================================
@@ -708,7 +717,7 @@ void scr_keyboard_loop()
       case 4:   //"Enter"
         if(lin_selec<KEYB_LINES)
         {
-          if((lin_selec==KEYB_LINES-1) && (col_selec==KEYB_COLS-2))  //espace
+          if((lin_selec==KEYB_LINES-1) && (col_selec==KEYB_COLS-2))  //space
           {
             //do not use space
           }
@@ -730,10 +739,14 @@ void scr_keyboard_loop()
         }
         else if(lin_selec==KEYB_LINES)
         {
-          if(col_selec==0)
+          if(col_selec==0)    //Back
             scr_main_setup();
           else
-            scr_main_setup();
+            {
+              //uint16_t BtcW_len = str_len(BtcWords[BtcW_pos]);
+              //if(BtcW_len > words_len)              
+              scr_main_setup();  //OK
+            }
         } 
 
 
@@ -915,6 +928,146 @@ void scr_qrcode_loop()
 
 
 
+//============================================================================
+// Desenha o endereço (até ADDR_LINE_MAX chars por linha), com quebra manual,
+// usando a fonte atual e espaçamento de linha em pixels (step). 
+// As linhas são desenhadas em y = y0 + n*step. Retorna o numero de linhas usadas.
+#define ADDR_LINE_MAX  18
+#define ADDR_ROW_STEP  20   // pixels entre linhas (glyph 16pt + folga)
+static uint16_t drawAddrLines(const char* s, uint16_t x, uint16_t y0, uint16_t step)
+{
+  uint16_t slen = 0;
+  while(s[slen]) slen++;
+  uint16_t count = 0;
+  uint16_t start = 0;
+  do
+  {
+    uint16_t n = slen - start;
+    if(n > ADDR_LINE_MAX) n = ADDR_LINE_MAX;
+    char line[ADDR_LINE_MAX+1];
+    for(uint16_t i=0; i<n; i++) line[i] = s[start+i];
+    line[n] = 0;
+    tft.drawString(line, x, y0 + count*step);
+    count++;
+    start += n;
+  } while(start < slen);
+  return count;
+}
+
+// Desenha uma linha de texto com a fonte/cores atuais em x,y.
+static void drawTextAt(const char* s, uint16_t x, uint16_t y, uint16_t highlight)
+{
+  if(highlight)
+    tft.setTextColor(hl_c_color, hl_bk_color);
+  else
+    tft.setTextColor(c_color, bk_color);
+  tft.drawString(s, x, y);
+}
+
+//============================================================================
+void scr_addr_setup()
+{
+/*
+se tela = SCR_ADDR
+   deriva o endereco BIP-84 a partir das 12 palavras (Words)
+   mostra o endereco (ou mensagem de erro)
+   qualquer tecla volta ao menu
+*/
+  scr = SCR_ADDR;
+  bk_color = TFT_BLUE;      //fundo do menu principal
+  c_color = TFT_YELLOW;     //letra do menu principal
+  hl_bk_color = TFT_YELLOW;
+  hl_c_color = TFT_BLUE;
+  displayFont = 3;   //FONT0 (FreeMonoBold9pt7b, 11x16 -> ~21 chars/linha)
+  tft.setRotation(0);
+  tft.setFreeFont(Fonts[displayFont].font);
+  tft.setTextSize(1);
+  tft.fillScreen(bk_color);
+
+  uint16_t x0 = 0;
+  uint16_t y  = 0;
+  const uint16_t ROW = ADDR_ROW_STEP;   //20 px por linha
+
+  drawTextAt("Address", x0, y, 0); y += ROW;
+  drawTextAt("m/84'/0'/0'/0/0", x0, y, 0); y += ROW;
+
+  //mostra as 12 palavras usadas (2 por linha, com indice 1..12)
+  char wline[40];
+  for(uint16_t pair = 0; pair < 6; pair++)
+  {
+    uint16_t k = 0;
+    for(uint16_t j = 0; j < 2; j++)
+    {
+      uint16_t i = pair*2 + j;
+      uint16_t wlen = 0;
+      const char* w = Words[i];
+      while(w[wlen]) wlen++;
+      if(i >= 9)      //indice 10..12 ocupa 2 digitos
+      { wline[k++] = '1'; wline[k++] = (char)('0' + (i+1)%10); }
+      else
+        wline[k++] = (char)('1' + i);
+      wline[k++] = ':';
+      for(uint16_t c=0; c<wlen; c++) wline[k++] = w[c];
+      wline[k++] = ' ';
+    }
+    wline[k] = 0;
+    drawTextAt(wline, x0, y, 0); y += ROW;
+  }
+  y += ROW;   // linhas de respiro
+
+  //monta as 12 palavras para o bip84
+  const char* wordptr[WORDS_NUM];
+  for(uint16_t i=0; i<WORDS_NUM; i++)
+    wordptr[i] = Words[i];
+
+  //deriva o endereco (pode demorar alguns segundos)
+  int rc = bip84_address_from_words(wordptr, BtcAddress, 100);
+
+  if(rc == 0)
+  {
+    y = drawAddrLines(BtcAddress, x0, y, ROW) * ROW + y;
+
+    //envia endereco pelo serial para consulta no PC/celular
+    Serial.println();
+    Serial.println("======= PicoSigner BIP-84 =======");
+    /*
+    Serial.print("Mnemonic: ");
+    for(uint16_t i=0; i<WORDS_NUM; i++)
+    {
+      if(i) Serial.print(" ");
+      Serial.print(Words[i]);
+    }
+    Serial.println();
+    */
+    Serial.print("Address : ");
+    Serial.println(BtcAddress);
+    Serial.print("Explore : https://mempool.space/address/");
+    Serial.println(BtcAddress);
+    Serial.println("=================================");
+  }
+  else
+  {
+    drawTextAt("Checksum/words invalid", x0, y, 0); y += ROW;
+    drawTextAt("adjust in Words screen", x0, y, 0); y += ROW;
+  }
+
+  //rodapé no fim da tela (320px de altura)
+  drawTextAt("[Enter] menu", x0, 320 - ROW, 1);
+}
+//============================================================================
+void scr_addr_loop()
+{
+  uint16_t tec = trata_teclas();
+  if(tec<NUM_SWITCHES)
+  {
+    scr_main_setup();
+  }
+}
+
+
+
+
+
 
 //============================================================================
 void display_tft_setup(void) 
@@ -1009,6 +1162,9 @@ void display_tft_loop(void)
       break;
     case SCR_QRCODE:
       scr_qrcode_loop();
+      break;
+    case SCR_ADDR:
+      scr_addr_loop();
       break;
     default:
       scr = SCR_MAIN;

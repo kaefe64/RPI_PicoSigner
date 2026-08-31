@@ -36,6 +36,11 @@ extern "C" {
 #define X_CHAR  11
 #define Y_CHAR  16
 */
+#define FONT0 &FreeMonoBold9pt7b
+#define X_CHAR0  11
+#define Y_CHAR0  16
+#define SIZE0    1
+
 #define FONT3 &FreeMonoBold24pt7b
 //#define FONT &FreeMono24pt7b
 //#define FONT &FreeSans24pt7b
@@ -98,7 +103,7 @@ uint16_t yellow = tft.color565(255, 255, 0);
 */
 
 
-#define FONTS_QTD  3
+#define FONTS_QTD  4
 struct st_font
 {
   const GFXfont* font;
@@ -117,6 +122,8 @@ extern TFT_eSPI tft;
 extern char Words[WORDS_NUM][16];
 extern uint16_t Word_pos[WORDS_NUM];  //11 bits / word
 
+extern char BtcAddress[100];   //BIP-84 derived address (bc1...) or empty
+
 extern uint16_t displayFont;
 extern uint32_t bk_color;
 extern uint32_t c_color;
@@ -134,6 +141,8 @@ void drawStringToImage(uint16_t *img, int16_t w, int16_t h, int16_t x, int16_t y
 void displayDrawImage(uint16_t *bitmapData, uint16_t w, uint16_t h);
 void display_tft_setup(void);
 void display_tft_loop(void);
+void scr_addr_setup(void);
+void scr_addr_loop(void);
 
 
 

@@ -28,7 +28,7 @@ uint16_t trata_teclas()
   if(ret != NUM_SWITCHES)
   {
     out_teclas = NUM_SWITCHES; //send out only once and try to no write to out_teclas at the same time as Core1
-    Serial.println(switches_func[ret]);
+    //Serial.println(switches_func[ret]);  //debug: send pressed switch to serial
   }
   return ret;
 }
