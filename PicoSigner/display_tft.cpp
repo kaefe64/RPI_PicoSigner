@@ -9,6 +9,7 @@ Display TFT ST7789 240x320
 */
 
 #include "Arduino.h"
+#include <string.h>
 //#include "tft_setup_RP2040_ST7789_240x320.h"
 #include "TFT_eSPI.h"   //Library  TFT_eSPI by Bodmer
 #include "display_tft.h"
@@ -47,6 +48,9 @@ const struct st_font Fonts[FONTS_QTD]={ {FONT1, X_CHAR1, Y_CHAR1},
 #define SCR_CAM         30
 #define SCR_QRCODE      40
 #define SCR_ADDR        50
+#define SCR_SEARCH      60
+
+#define SEARCH_RESULTS_MAX  10
 
 uint16_t scr = SCR_MAIN;
 
@@ -56,19 +60,23 @@ uint32_t c_color;
 uint32_t hl_bk_color;
 uint32_t hl_c_color;
 
-uint16_t words_selec=0;
-uint16_t words_len;
+uint16_t words_selec_num=0;
+uint16_t words_selec_len;
+char Words_selec[16];
 
 
 //char Words[WORDS_NUM][16] = {"ab","","","","","","","","","","",""};
-//char Words[WORDS_NUM][16] = {"spy", "profit", "item", "promote", "equal", "wealth", "nice", "prize", "cute", "lawsuit", "stage", "capital"};
-//uint16_t Word_pos[WORDS_NUM] = {1690,	1374,	950,	1377,	608,	1985,	1195,	1370,	437,	1009,	1697,	272 };   //11 bits / word
+char Words[WORDS_NUM][16] = {"spy", "profit", "item", "promote", "equal", "wealth", "nice", "prize", "cute", "lawsuit", "stage", "capital"};
+uint16_t Word_pos[WORDS_NUM] = {1690,	1374,	950,	1377,	608,	1985,	1195,	1370,	437,	1009,	1697,	272 };   //11 bits / word
 
 //default de teste = vetor BIP-84 oficial (abandon x11 + about)
-char Words[WORDS_NUM][16] = {"abandon", "abandon", "abandon", "abandon", "abandon", "abandon", "abandon", "abandon", "abandon", "abandon", "abandon", "about"};
-uint16_t Word_pos[WORDS_NUM] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3 };   //11 bits / word
+//char Words[WORDS_NUM][16] = {"abandon", "abandon", "abandon", "abandon", "abandon", "abandon", "abandon", "abandon", "abandon", "abandon", "abandon", "about"};
+//uint16_t Word_pos[WORDS_NUM] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3 };   //11 bits / word
 
 char BtcAddress[100] = "";   //BIP-84 derived address (bc1...) or empty
+
+char SearchResults[SEARCH_RESULTS_MAX][16];
+uint16_t search_results_num = 0;
 
 uint16_t lin_selec;
 uint16_t col_selec;
@@ -85,6 +93,8 @@ void scr_keyboard_setup();
 void scr_keyboard_loop();
 void scr_words_setup();
 void scr_words_loop();
+void scr_search_setup();
+void scr_search_loop();
 void scr_cam_setup();
 void scr_cam_loop();
 void scr_qrcode_setup();
@@ -463,6 +473,36 @@ void displayDrawOpt(const char *s, uint16_t col, uint16_t lin, uint16_t highligh
 
 }
 
+//============================================================================
+//Desenha a tecla "Back" nas telas words/search com contorno arredondado,
+//usando o mesmo grid (fonte/tamanho/posicao) das palavras da lista.
+void displayDrawBackButton(uint16_t col, uint16_t lin, uint16_t highlight)
+{
+  const char *s = "Back";
+  uint16_t len = str_len(s);
+  uint16_t x = col*(Fonts[displayFont].width);
+  uint16_t y = lin*(Fonts[displayFont].height)+3;
+  uint16_t bx = x-5;
+  uint16_t by = y;
+  uint16_t bw = (Fonts[displayFont].width*len)+9;
+  uint16_t bh = Fonts[displayFont].height+2;
+
+  if(highlight == 0)
+  {
+    tft.fillRoundRect(bx, by, bw, bh, 5, bk_color);
+    tft.setTextColor(c_color, bk_color);
+    tft.drawString(s, x, y);
+    tft.drawRoundRect(bx, by, bw, bh, 5, c_color);
+  }
+  else
+  {
+    tft.fillRoundRect(bx, by, bw, bh, 5, hl_bk_color);
+    tft.setTextColor(hl_c_color, hl_bk_color);
+    tft.drawString(s, x, y);
+    tft.drawRoundRect(bx, by, bw, bh, 5, hl_c_color);
+  }
+}
+
 
 
 
@@ -546,6 +586,8 @@ void scr_main_loop()
 
 #define KEY_BACK  "Back"
 #define KEY_OK    "OK"
+#define KEY_SEARCH  "Search"
+
 
 //============================================================================
 void displayDrawEdit()
@@ -553,17 +595,17 @@ void displayDrawEdit()
   tft.fillRoundRect(12, 13, (Fonts[displayFont].width*10), (Fonts[displayFont].height*2)-3, 8, bk_color);
   tft.drawRoundRect(12, 13, (Fonts[displayFont].width*10), (Fonts[displayFont].height*2)-3, 8, c_color);
 
-  displayDrawWord(Words[words_selec], 1, 1, 1);
+  displayDrawWord(Words_selec, 1, 1, 1);
 
-  uint16_t BtcW_pos = SearchBtcWords(Words[words_selec]);
+  uint16_t BtcW_pos = SearchBtcWords(Words_selec);
   if(BtcW_pos < BTCWORDS_NUM)  //found similar
   {
     uint16_t BtcW_len = str_len(BtcWords[BtcW_pos]);
-    if(BtcW_len > words_len)
-      displayDrawWord(&BtcWords[BtcW_pos][words_len], 1+words_len, 1, 0);
+    if(BtcW_len > words_selec_len)
+      displayDrawWord(&BtcWords[BtcW_pos][words_selec_len], 1+words_selec_len, 1, 0);
   }
 
-  displayCursor(1+words_len, 1, 1); 
+  displayCursor(1+words_selec_len, 1, 1); 
 }
 
 //============================================================================
@@ -617,25 +659,26 @@ a cada letra, procura em BtcWords por uma palavra possivel
   //displayCursor(5, 1, 1);
   //displayCursor(2, 1, 0);
 
-  words_len = str_len(Words[words_selec]);
-/*
-  displayDrawWord(Words[words_selec], 1, 1, 1);
+  strcpy(Words_selec, Words[words_selec_num]);
 
-  uint16_t BtcW_pos = SearchBtcWords(Words[words_selec]);
+  words_selec_len = str_len(Words_selec);
+/*
+  displayDrawWord(Words_selec, 1, 1, 1);
+
+  uint16_t BtcW_pos = SearchBtcWords(Words_selec);
   if(BtcW_pos < BTCWORDS_NUM)  //found similar
   {
     uint16_t BtcW_len = str_len(BtcWords[BtcW_pos]);
-    if(BtcW_len > words_len)
-      displayDrawWord(&BtcWords[BtcW_pos][words_len], 1+words_len, 1, 0);
+    if(BtcW_len > words_selec_len)
+      displayDrawWord(&BtcWords[BtcW_pos][words_selec_len], 1+words_selec_len, 1, 0);
   }
 
-  displayCursor(1+words_len, 1, 1);
+  displayCursor(1+words_selec_len, 1, 1);
 */
   displayDrawEdit();
   displayDrawWordKey(KEY_BACK, 1, lin_ini+KEYB_LINES, 0);
   displayDrawWordKey(KEY_OK, 5, lin_ini+KEYB_LINES, 0);
-
-
+  displayDrawWordKey(KEY_SEARCH, 2, lin_ini+KEYB_LINES+1, 0);
 }
 //============================================================================
 void scr_keyboard_loop()
@@ -665,6 +708,15 @@ void scr_keyboard_loop()
           displayDrawKey(Letters[lin_selec][col_selec], col_selec, lin_selec, 0);
           lin_selec--;
           displayDrawKey(Letters[lin_selec][col_selec], col_selec, lin_selec, 1);
+        }   
+        else if(lin_selec==KEYB_LINES+1)
+        {
+          displayDrawWordKey(KEY_SEARCH, 2, lin_ini+KEYB_LINES+1, 0);
+          lin_selec--;
+          if(col_selec==0)
+            displayDrawWordKey(KEY_BACK, 1, lin_ini+KEYB_LINES, 1);
+          else
+            displayDrawWordKey(KEY_OK, 5, lin_ini+KEYB_LINES, 1);
         }   
         else if(lin_selec==KEYB_LINES)
         {
@@ -699,6 +751,15 @@ void scr_keyboard_loop()
           else
             displayDrawWordKey(KEY_OK, 5, lin_ini+KEYB_LINES, 1);
         }
+        else if(lin_selec==KEYB_LINES)
+        {
+          if(col_selec==0)
+            displayDrawWordKey(KEY_BACK, 1, lin_ini+KEYB_LINES, 0);
+          else
+            displayDrawWordKey(KEY_OK, 5, lin_ini+KEYB_LINES, 0);
+          lin_selec++;
+          displayDrawWordKey(KEY_SEARCH, 2, lin_ini+KEYB_LINES+1, 1);
+        }
         break;
       case 3:   //"Right"
         if((lin_selec<KEYB_LINES) && (col_selec<KEYB_COLS-1))
@@ -723,35 +784,51 @@ void scr_keyboard_loop()
           }
           else if((lin_selec==KEYB_LINES-1) && (col_selec==KEYB_COLS-1))  // Backspace  <
           {
-            if(words_len > 0)
+            if(words_selec_len > 0)
             {
-              words_len--;
-              Words[words_selec][words_len] = 0;
+              words_selec_len--;
+              Words_selec[words_selec_len] = 0;
               displayDrawEdit();
             }
           }          
-          else if(words_len < BTCWORDS_MAX_LEN)
+          else if(words_selec_len < BTCWORDS_MAX_LEN)
           {
-            Words[words_selec][words_len] = Letters[lin_selec][col_selec];
-            words_len++;
+            Words_selec[words_selec_len] = Letters[lin_selec][col_selec];
+            words_selec_len++;
             displayDrawEdit();        
           }
         }
         else if(lin_selec==KEYB_LINES)
         {
           if(col_selec==0)    //Back
-            scr_main_setup();
-          else
+          {
+            //scr_main_setup();
+            scr_words_setup();  //come back without change
+          }
+          else  //OK
+          {
+            //uint16_t BtcW_len = str_len(BtcWords[BtcW_pos]);
+            //if(BtcW_len > words_selec_len)              
+            //scr_main_setup();
+            if(str_len(Words_selec)>0)  //some word
             {
-              //uint16_t BtcW_len = str_len(BtcWords[BtcW_pos]);
-              //if(BtcW_len > words_len)              
-              scr_main_setup();  //OK
+              uint16_t BtcW_pos = SearchBtcWords(Words_selec);
+              if(BtcW_pos < BTCWORDS_NUM)  //found similar
+              {
+                strcpy(Words[words_selec_num], BtcWords[BtcW_pos]); //copy the find
+              }
             }
+            scr_words_setup();
+          }
         } 
-
-
-
-
+        else if(lin_selec==KEYB_LINES+1)
+        {
+          if(str_len(Words_selec)>0)  //some word
+          {
+            //Search - abre a tela de busca com as palavras relacionadas
+            scr_search_setup();
+          }
+        }
         break;
       default:
         break;
@@ -791,8 +868,7 @@ void scr_words_setup()
 /*
 se tela = SCR_WORDS
    mostra palavras
-   e BACK ou OK
-   se OK, volta para tela 0
+   se Left, volta para tela 0
 */
   scr = SCR_WORDS;
   displayFont = 0;
@@ -800,11 +876,10 @@ se tela = SCR_WORDS
   tft.fillScreen(bk_color);            // Preenche a tela
 
   col_selec = 0;
-  lin_ini = 2;
+  lin_ini = 1;
   col_ini = 3;
 
-  displayDrawOpt("PicoSigner", 3, 0, 0);
-  displayDrawOpt("PassWords", 3, 1, 0);
+  displayDrawOpt("PassWords", 3, 0, 0);
 
   for(lin_selec=0; lin_selec<WORDS_NUM; lin_selec++)
   {
@@ -812,6 +887,7 @@ se tela = SCR_WORDS
   }
   lin_selec = 0;
   drawWordLin(1);
+  displayDrawBackButton(2, lin_ini+WORDS_NUM, 0);
 
 }
 //============================================================================
@@ -826,31 +902,55 @@ void scr_words_loop()
           scr_main_setup();
         break;
       case 1:   //"Up"
-        if(lin_selec>0)
+        if(lin_selec==WORDS_NUM)   //no botao Back
+        {
+          displayDrawBackButton(2, lin_ini+WORDS_NUM, 0);
+          lin_selec--;
+          drawWordLin(1);
+        }
+        else if(lin_selec==0)   //primeira linha -> botao Back
+        {
+          drawWordLin(0);
+          lin_selec = WORDS_NUM;
+          displayDrawBackButton(2, lin_ini+WORDS_NUM, 1);
+        }
+        else if(lin_selec>0)
         {
           drawWordLin(0);
           lin_selec--;
           drawWordLin(1);
-          //displayDrawOpt(MainOpts[lin_selec], col_ini, lin_ini+lin_selec, 1);
         }      
         break;
       case 2:   //"Down"
         if(lin_selec<WORDS_NUM-1)
         {
           drawWordLin(0);
-          //displayDrawOpt(MainOpts[lin_selec], col_ini, lin_ini+lin_selec, 0);
           lin_selec++;
           drawWordLin(1);
-          //displayDrawOpt(MainOpts[lin_selec], col_ini, lin_ini+lin_selec, 1);
+        }
+        else if(lin_selec==WORDS_NUM-1)   //ultima palavra -> botao Back
+        {
+          drawWordLin(0);
+          lin_selec++;
+          displayDrawBackButton(2, lin_ini+WORDS_NUM, 1);
+        }
+        else if(lin_selec==WORDS_NUM)   //botao Back -> primeira palavra
+        {
+          displayDrawBackButton(2, lin_ini+WORDS_NUM, 0);
+          lin_selec = 0;
+          drawWordLin(1);
         }
         break;
       case 3:   //"Right"
         break;
       case 4:   //"Enter"
-        //MainOptsFunc[lin_selec]();
-        //scr_main_setup();
-        words_selec = lin_selec;
-        scr_keyboard_setup();
+        if(lin_selec==WORDS_NUM)   //botao Back (touch/enter)
+          scr_main_setup();
+        else
+        {
+          words_selec_num = lin_selec;
+          scr_keyboard_setup();
+        }
         break;
       default:
         break;
@@ -859,6 +959,217 @@ void scr_words_loop()
 
 
 }
+
+
+//============================================================================
+void drawSearchLin(uint16_t hl)
+{
+  char s[5] = " 0-";
+  if(lin_selec<9) { s[0]=' ';  s[1]='1'+lin_selec;  }
+  else            { s[0]='1';  s[1]='0'+lin_selec-9; }
+  displayDrawOpt(s, 0, lin_ini+lin_selec, hl);
+  displayDrawOpt(SearchResults[lin_selec], col_ini, lin_ini+lin_selec, hl);
+}
+
+//============================================================================
+//Varre todas as 2048 palavras BIP-39 e guarda as 10 mais relacionadas ao
+//texto digitado no campo do teclado (Words_selec). Mesmo heuristica usada
+//no projeto de referencia BtcWords (prefixo + completacao curta + letras).
+void findSearchResults(const char *input)
+{
+  uint16_t in_len = str_len(input);
+  int32_t topScore[SEARCH_RESULTS_MAX];
+  uint16_t topIdx[SEARCH_RESULTS_MAX];
+  search_results_num = 0;
+
+  for(uint16_t i=0; i<BTCWORDS_NUM; i++)
+  {
+    const char *kw = BtcWords[i];
+    int32_t score = 0;
+
+    //(A) prefixo: bonus forte
+    if(strncmp(kw, input, in_len) == 0)
+    {
+      score += 10000;
+      int32_t diff = (int32_t)str_len(kw) - (int32_t)in_len;
+      if(diff <= 3)
+        score += 1000 - diff*100;   //bonus por ser uma completacao curta
+    }
+
+    //(B) coincidencia por caractere: bonus fraco
+    for(uint16_t c=0; c<in_len; c++)
+    {
+      if(strchr(kw, input[c]) != NULL)
+        score += 2;
+    }
+
+    if(score <= 0)
+      continue;
+
+    //insere ordenado (score desc, depois alfabetico) mantendo ate 10
+    if(search_results_num < SEARCH_RESULTS_MAX)
+    {
+      int32_t p = search_results_num;
+      while(p > 0 &&
+        (score > topScore[p-1] ||
+         (score == topScore[p-1] && strcmp(kw, BtcWords[topIdx[p-1]]) < 0)))
+      {
+        topScore[p] = topScore[p-1];
+        topIdx[p] = topIdx[p-1];
+        p--;
+      }
+      topScore[p] = score;
+      topIdx[p] = i;
+      search_results_num++;
+    }
+    else
+    {
+      //lista cheia: so entra se superar o ultimo (pior) item
+      int32_t last = topScore[SEARCH_RESULTS_MAX-1];
+      if(score > last ||
+         (score == last && strcmp(kw, BtcWords[topIdx[SEARCH_RESULTS_MAX-1]]) < 0))
+      {
+        int32_t p = SEARCH_RESULTS_MAX-1;
+        while(p > 0 &&
+          (score > topScore[p-1] ||
+           (score == topScore[p-1] && strcmp(kw, BtcWords[topIdx[p-1]]) < 0)))
+        {
+          topScore[p] = topScore[p-1];
+          topIdx[p] = topIdx[p-1];
+          p--;
+        }
+        topScore[p] = score;
+        topIdx[p] = i;
+      }
+    }
+  }
+
+  for(uint16_t i=0; i<search_results_num; i++)
+    strcpy(SearchResults[i], BtcWords[topIdx[i]]);
+}
+
+//============================================================================
+void scr_search_setup()
+{
+/*
+se tela = SCR_SEARCH
+   mostra palavras que combinam com o texto digitado
+   se Left, volta para tela de words (sem alterar nada)
+   se Enter, seleciona a palavra e volta para o teclado preenchendo o campo
+*/
+/*
+  if(str_len(Words_selec) == 0)
+  {
+    scr_keyboard_setup();   //campo vazio nao gera resultados
+    return;
+  }
+*/
+  findSearchResults(Words_selec);
+
+  scr = SCR_SEARCH;
+  displayFont = 0;
+  tft.setFreeFont(Fonts[displayFont].font);      // Select the font
+  tft.fillScreen(bk_color);            // Preenche a tela
+
+  col_selec = 0;
+  lin_ini = 2;
+  col_ini = 3;
+
+  displayDrawOpt("PicoSigner", 3, 0, 0);
+  displayDrawOpt("Search", 3, 1, 0);
+
+  for(lin_selec=0; lin_selec<search_results_num; lin_selec++)
+  {
+    drawSearchLin(0);
+  }
+  if(search_results_num > 0)
+  {
+    lin_selec = 0;
+    drawSearchLin(1);
+  }
+  else
+  {
+    lin_selec = 0;
+  }
+
+  displayDrawBackButton(2, lin_ini+SEARCH_RESULTS_MAX, 0);
+
+}
+//============================================================================
+void scr_search_loop()
+{
+  uint16_t tec = trata_teclas();
+  if(tec<NUM_SWITCHES)
+  {
+    switch(tec)
+    {
+      case 0:   //"Left"
+        scr_keyboard_setup();   //volta sem alterar nada
+        break;
+      case 1:   //"Up"
+        if(lin_selec==SEARCH_RESULTS_MAX)   //no botao Back
+        {
+          displayDrawBackButton(2, lin_ini+SEARCH_RESULTS_MAX, 0);
+          if(search_results_num > 0)
+          {
+            lin_selec = search_results_num-1;
+            drawSearchLin(1);
+          }
+        }
+        else if(search_results_num > 0 && lin_selec==0)   //primeira linha -> botao Back
+        {
+          drawSearchLin(0);
+          lin_selec = SEARCH_RESULTS_MAX;
+          displayDrawBackButton(2, lin_ini+SEARCH_RESULTS_MAX, 1);
+        }
+        else if(search_results_num > 0 && lin_selec>0)
+        {
+          drawSearchLin(0);
+          lin_selec--;
+          drawSearchLin(1);
+        }
+        break;
+      case 2:   //"Down"
+        if(search_results_num > 0 && lin_selec<search_results_num-1)
+        {
+          drawSearchLin(0);
+          lin_selec++;
+          drawSearchLin(1);
+        }
+        else if(search_results_num > 0 && lin_selec==search_results_num-1)
+        {
+          //ultima palavra -> botao Back
+          drawSearchLin(0);
+          lin_selec = SEARCH_RESULTS_MAX;
+          displayDrawBackButton(2, lin_ini+SEARCH_RESULTS_MAX, 1);
+        }
+        else if(search_results_num > 0 && lin_selec==SEARCH_RESULTS_MAX)
+        {
+          //botao Back -> primeira palavra
+          displayDrawBackButton(2, lin_ini+SEARCH_RESULTS_MAX, 0);
+          lin_selec = 0;
+          drawSearchLin(1);
+        }
+        break;
+      case 3:   //"Right"
+        break;
+      case 4:   //"Enter"
+        if(lin_selec==SEARCH_RESULTS_MAX)   //botao Back (touch/enter)
+          scr_keyboard_setup();   //volta sem alterar nada
+        else if(search_results_num > 0)
+        {
+          //grava a palavra selecionada em Words[words_selec_num]; o setup do
+          //teclado entao copia para Words_selec, preenchendo o campo
+          strcpy(Words[words_selec_num], SearchResults[lin_selec]);
+          scr_keyboard_setup();   //preenche o campo e volta
+        }
+        break;
+      default:
+        break;
+    }
+  }
+}
+
 
 //============================================================================
 void scr_cam_setup()
@@ -990,7 +1301,25 @@ se tela = SCR_ADDR
 
   drawTextAt("Address", x0, y, 0); y += ROW;
   drawTextAt("m/84'/0'/0'/0/0", x0, y, 0); y += ROW;
-
+/*
+O texto m/84'/0'/0'/0/0 é um caminho de derivação (derivation path) 
+que mostra o endereço exato de uma carteira de Bitcoin gerado a partir 
+da sua frase semente (seed phrase).
+Cada parte do texto separada por uma barra (/) tem uma função específica:
+m: Representa a chave mestre (master private key), que é a raiz de onde 
+todas as outras chaves da carteira são criadas.
+84': Indica o propósito do padrão (BIP84). O número 84 significa que este 
+endereço usa o formato Native SegWit (endereços modernos de Bitcoin que 
+omeçam com bc1). O apóstrofo (') significa que essa etapa usa uma 
+"derivação endurecida" para maior segurança.
+0': Indica o tipo de moeda. O número 0 é o código padrão para o Bitcoin (BTC).
+0': Indica o número da conta. O primeiro valor de conta é sempre o zero (0).
+0: Indica a cadeia (chain). O número 0 significa que é um endereço público 
+para receber fundos. Se fosse 1, seria um endereço interno usado para trocos.
+0: Indica o índice do endereço. O número 0 representa o primeiro 
+endereço gerado nessa sequência específica. O próximo seria 1, 
+depois 2, e assim por diante.
+*/
   //mostra as 12 palavras usadas (2 por linha, com indice 1..12)
   char wline[40];
   for(uint16_t pair = 0; pair < 6; pair++)
@@ -1020,12 +1349,18 @@ se tela = SCR_ADDR
   for(uint16_t i=0; i<WORDS_NUM; i++)
     wordptr[i] = Words[i];
 
+
+  drawTextAt("Please wait...", x0, y, 0);
+
   //deriva o endereco (pode demorar alguns segundos)
   int rc = bip84_address_from_words(wordptr, BtcAddress, 100);
 
   if(rc == 0)
   {
     y = drawAddrLines(BtcAddress, x0, y, ROW) * ROW + y;
+
+    drawTextAt("Public address sent", x0, 320 - (3*ROW), 0);
+    drawTextAt("through serial.", x0, 320 - (2*ROW), 0);
 
     //envia endereco pelo serial para consulta no PC/celular
     Serial.println();
@@ -1165,6 +1500,9 @@ void display_tft_loop(void)
       break;
     case SCR_ADDR:
       scr_addr_loop();
+      break;
+    case SCR_SEARCH:
+      scr_search_loop();
       break;
     default:
       scr = SCR_MAIN;
