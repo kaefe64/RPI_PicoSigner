@@ -172,7 +172,7 @@ void QRCode_init(uint8_t* image)
   {
     Serial.println("can't create quirc object");
   }
-  else if (quirc_resize(qr, TFT_HEIGHT, TFT_WIDTH, image) < 0)  //allocate the image buffer
+  else if (quirc_resize(qr, TFT_HEIGHT, TFT_WIDTH, image) < 0)  //allocate the image buffer  //(TFT_HEIGHT,TFT_WIDTH)=(320,240) = dims do frame da camera
   {
     Serial.println("Failed to allocate video memory");
   }
@@ -406,6 +406,9 @@ void QRCode_decode(uint16_t* rgb_image)
 
   int num_codes = quirc_count(qr);
   //debug serial (removido)
+  //debug temporario
+  //Serial.print("QRCode_decode num_codes = ");
+  //Serial.println(num_codes);
   //if(num_codes>0)
   //{
   //  Serial.print("Quirc   num_codes = ");
@@ -443,6 +446,8 @@ void QRCode_decode(uint16_t* rgb_image)
     }
     else
     {
+      //debug temporario
+      //Serial.println("QRCode_decode OK");
       //debug serial (removido): envio das palavras lidas via QR
       //Serial.print("Data: ");
       //for(uint16_t i=0; i<40; i++)

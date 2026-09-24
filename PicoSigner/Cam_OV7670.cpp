@@ -133,7 +133,11 @@ void Cam_OV7670_loop(uint16_t tec)
   displayDrawImage(frame_ov7670, FRAME_WIDTH, FRAME_HEIGHT);
 
   if(tec == 4)  //enter
+  {
+    //debug temporario
+    //Serial.println("Enter -> QRCode_decode");
     QRCode_decode(frame_ov7670);  //it will use the frame buffer for decoding
+  }
 
 }
 

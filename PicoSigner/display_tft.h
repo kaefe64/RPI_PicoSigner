@@ -55,8 +55,8 @@ extern "C" {
 #define Y_CHAR2  32
 #define SIZE2    1
 
-#define FONT1 &FreeMonoBold12pt7b
 //#define FONT2 &FreeSans9pt7b
+#define FONT1 &FreeMonoBold12pt7b
 #define X_CHAR1  14
 #define Y_CHAR1  22
 #define SIZE1    1
@@ -115,7 +115,6 @@ struct st_font
 extern const struct st_font Fonts[FONTS_QTD];
 
 
-
 extern TFT_eSPI tft;
 
 #define WORDS_NUM    12
@@ -125,6 +124,7 @@ extern uint16_t Word_pos[WORDS_NUM];  //11 bits / word
 extern char BtcAddress[100];   //BIP-84 derived address (bc1...) or empty
 
 extern uint16_t displayFont;
+extern uint16_t displayRotation;
 extern uint32_t bk_color;
 extern uint32_t c_color;
 extern uint32_t hl_bk_color;
@@ -133,9 +133,69 @@ extern uint32_t hl_c_color;
 //extern uint16_t single_bitmap[SEGMENT_WIDTH * SEGMENT_HEIGHT];
 
 
-//void displayDrawKey(char c, uint16_t col, uint16_t line, uint16_t highlight);
-//void displayDrawCharKey(char c, uint16_t x, uint16_t y, uint16_t highlight);
-//void drawSegment(uint16_t *bitmapData, int segment_index);
+
+
+
+#define SCR_MAIN        0
+#define SCR_KEYBOARD    10
+#define SCR_WORDS       20
+#define SCR_CAM         30
+#define SCR_QRCODE      40
+#define SCR_ADDR        50
+#define SCR_SEARCH      60
+
+#define SEARCH_RESULTS_MAX  10
+extern char SearchResults[SEARCH_RESULTS_MAX][16];
+extern uint16_t search_results_num;
+
+
+
+
+#define MAIN_OPTS  4
+extern const char MainOpts[MAIN_OPTS][12];
+//extern const uint16_t MainOptsScr[MAIN_OPTS];
+extern void (*MainOptsFunc[MAIN_OPTS])(void);
+ 
+
+
+
+#define KEYB_LINES  4
+#define KEYB_COLS   7
+// Used for displaying Leter board
+extern char Letters[KEYB_LINES][KEYB_COLS+1];
+
+#define KEY_BACK  "Back"
+#define KEY_OK    "OK"
+#define KEY_SEARCH  "Search"
+
+
+
+extern uint16_t scr;
+
+// Variaveis de display_tft.cpp usadas pelos handlers de touch
+extern uint16_t lin_selec;
+extern uint16_t lin_ini;
+extern uint16_t col_ini;
+extern uint16_t words_selec_num;
+
+void displayDrawOpt(const char *s, uint16_t col, uint16_t lin, uint16_t highlight);
+void tft_keyboard_touch(uint16_t col, uint16_t lin);
+void scr_main_setup();
+void scr_main_loop();
+void scr_keyboard_setup();
+void scr_keyboard_loop();
+void scr_words_setup();
+void scr_words_loop();
+void scr_search_setup();
+void scr_search_loop();
+void scr_cam_setup();
+void scr_cam_loop();
+void scr_qrcode_setup();
+void scr_qrcode_loop();
+void scr_addr_setup(void);
+
+
+
 uint16_t tft_color565(uint16_t r, uint16_t g, uint16_t b);
 void drawStringToImage(uint16_t *img, int16_t w, int16_t h, int16_t x, int16_t y, const char *str, uint16_t color);
 void displayDrawImage(uint16_t *bitmapData, uint16_t w, uint16_t h);

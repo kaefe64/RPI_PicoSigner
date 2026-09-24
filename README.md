@@ -1,6 +1,6 @@
 # RPI_PicoSigner
 # Airgapped Bitcoin transaction signing device
-# Using RPI Pico RP2040, OV7670 and ST7789
+# Using RPI Pico RP2040, OV7670 and ILI9341
 # ** Not finished **
 ## by Klaus Fensterseifer - PY2KLA
 
@@ -9,7 +9,7 @@
 <br>
 This project is an attempt to create a Bitcoin transaction signing device similar to SeedSigner (https://github.com/SeedSigner/seedsigner), but using a Raspberry Pi Pico without access to Wi-Fi, Bluetooth, or any other means of communication.<br>
 
-It uses a Raspberry Pi Pico RP2040, an OV7670 camera, and an ST7789 display, all low-cost components.<br>
+It uses a Raspberry Pi Pico RP2040, an OV7670 camera, and an ILI9341 display, all low-cost components.<br>
 
 The idea is to create a project similar to SeedSigner, but simpler.<br>
 <br>

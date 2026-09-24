@@ -45,6 +45,21 @@ int bip84_address_from_words(const char *words[12],
  */
 int bip39_words_checksum_ok(const char *words[12]);
 
+/*
+ * Returns 1 if `candidate`, used as the 12th word after the 11 words in
+ * `first11`, produces a valid BIP-39 checksum, 0 otherwise.
+ */
+int bip39_last_word_checksum_ok(const char *first11[11], const char *candidate);
+
+/*
+ * Among `candidates` (cand_count NULL-terminated words), copies up to max_out
+ * words which, used as the 12th word after `first11`, pass the BIP-39
+ * checksum. Returns the number of words copied.
+ */
+int bip39_valid_last_words(const char *first11[11],
+                           const char *const *candidates, uint16_t cand_count,
+                           char (*out)[16], uint16_t max_out);
+
 #ifdef __cplusplus
 }
 #endif

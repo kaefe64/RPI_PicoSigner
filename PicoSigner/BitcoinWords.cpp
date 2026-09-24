@@ -81,7 +81,8 @@ uint16_t SearchBtcWords(char *w)
     CheckBtcWordsPos(); 
 
     uint16_t ret = BTCWORDS_NUM;  //no word found flag
-    if((w[0]>='a')&&(w[0]<='z')&&(w[0]!='x'))  //only lower case and no 'x' words
+    //only lower case, no 'x' words and at least 2 letters
+    if((w[0]>='a')&&(w[0]<='z')&&(w[0]!='x')&&(w[1]!=0))
     {
         //the words on BtcWords are in alphabetic order
         uint16_t j = 1;  //start search for w word second letter (first letter already match)

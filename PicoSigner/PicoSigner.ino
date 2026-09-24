@@ -2,7 +2,7 @@
 PicoSigner.ino
 
 Software for a Bitcoin transaction signing device
-Using RPI Pico RP2040, OV7670 and ST7789
+Using RPI Pico RP2040, OV7670 and ILI9341
 
 Created: Aug 2025
 Author: Klaus Fensterseifer
@@ -14,6 +14,7 @@ Board: Arduino Raspberry Pi Pico/RP2040/RP2350 by  Earle F. Philhower, III
 Arduino Library: 
 Crypto by Rhys Weatherley
 QRCode by Richard Moore
+TFT_eSPI  by Bodmer
 
 Serial:
 /dev/ttyACM0
@@ -23,6 +24,8 @@ Serial:
 Warning must be ignored (display without touch):
 #warning >>>>------>> TOUCH_CS pin not defined, TFT_eSPI touch functions will not be available!
 
+To clean previous compilation, erase the newer folder at:
+/home/kf/.cache/arduino/sketches
 
 
 Obs.:
@@ -70,7 +73,7 @@ headroom. Flash: 2 MB default is fine; gc-sections drops unused code.
 ============================================================================
 */
 
-#include "PicoDisplayST7789.h" 
+//#include "PicoDisplayILI9341.h" 
 #include "TFT_eSPI.h"
 #include "display_tft.h" 
 #include "Cam_OV7670.h" 

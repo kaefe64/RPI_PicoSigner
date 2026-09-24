@@ -197,6 +197,31 @@ int bip39_words_checksum_ok(const char *words[12])
     return expected == cs4 ? 1 : 0;
 }
 
+int bip39_last_word_checksum_ok(const char *first11[11], const char *candidate)
+{
+    const char *words[12];
+    for (int i = 0; i < 11; i++) words[i] = first11[i];
+    words[11] = candidate;
+    return bip39_words_checksum_ok(words);
+}
+
+int bip39_valid_last_words(const char *first11[11],
+                           const char *const *candidates, uint16_t cand_count,
+                           char (*out)[16], uint16_t max_out)
+{
+    uint16_t n = 0;
+    for (uint16_t c = 0; c < cand_count && n < max_out; c++)
+    {
+        if (bip39_last_word_checksum_ok(first11, candidates[c]) == 1)
+        {
+            strncpy(out[n], candidates[c], 15);
+            out[n][15] = 0;
+            n++;
+        }
+    }
+    return n;
+}
+
 int bip84_address_from_words(const char *words[12],
                              char *address_out, size_t address_out_size)
 {

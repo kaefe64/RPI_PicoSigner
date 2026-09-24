@@ -1,18 +1,89 @@
 /*
- * display_tft.cpp
+ * 
  * 
  * Created: Aug 2025
  * Author: Klaus Fensterseifer
 
-Display TFT ST7789 240x320
-  
+
+Library  TFT_eSPI by Bodmer
+
+
+>>Mods in the Library files to fit to the project:
+=================================================
+
+--------------------------------------------------------------
+--------------------------------------------------------------
+>>TFT_eSPI LIBRARY:
+----------------------------------------------------
+>>Change Arduino/libraries/TFT_eSPI/User_Setup_Select.h
+>>Comment:
+//#include <User_Setup.h>           // Default setup is root library folder
+>>UnComment:
+#include <User_Setups/Setup60_RP2040_ILI9341.h>    // Setup file for RP2040 with SPI ILI9341
+
+----------------------------------------------------
+>>On User_Setups/Setup60_RP2040_ILI9341.h
+>>Uncomment:
+#define ILI9341_DRIVER
+#define TFT_RGB_ORDER TFT_RGB  // Colour order Red-Green-Blue
+
+>>Choose the SPI pins (SPI1):
+// For the Pico use these #define lines
+#define TFT_MISO  4    // GP4 - Display SDO/MISO (ou NC se nao ler o display)
+#define TFT_MOSI  3    // GP3 - Display SDI/MOSI
+#define TFT_SCLK  2    // GP2 - Display SCK
+#define TFT_CS    5    // GP5 - Chip Select pin
+#define TFT_DC    1    // GP1 - Data Command control pin
+#define TFT_RST   0    // GP0 - Reset pin
+//#define TFT_BL     // LED back-light
+
+#define TOUCH_CS 6     // Chip select pin (T_CS) of touch screen
+
+>>Choose SPI 1
+#define TFT_SPI_PORT 1   // Set to 0 if SPI0 pins are used, or 1 if SPI1 pins used
+
+
+
+
+Display TFT ILI9341 240x320 (anteriormente ST7789)
+
+
+Display TFT SPI ILI9341 240x320 with touch 
+2.4" SKU: MSP2402 
+XC6206P332MR (662K) REG 3V3 200mA SOT23
+XPT2046 touch
+Info:
+https://simple-circuit.com/interfacing-arduino-ili9341-tft-display/?utm_source=chatgpt.com
+https://openhasp.haswitchplate.com/0.6.3/displays/MSPxxxx/?utm_source=chatgpt.com
+
+
+VCC        5V (or 3V3 with jumper J1)
+GND        GND
+CS         GP5
+RES        GP0
+DC         GP1
+SDI/MOSI   GP3
+SCK        GP2
+LED        3V3 (or logic level)
+SDO/MISO   GP4 (or NC if no display reading)
+T_CLK      GP2
+T_CS       GP6
+T_DIN      GP3
+T_DO       GP4
+T_IRQ      GP7 (or NC if polling to know  pressed - not used by library)
+
+
+
+
+
 */
 
 #include "Arduino.h"
 #include <string.h>
-//#include "tft_setup_RP2040_ST7789_240x320.h"
+// A configuracao do TFT (ILI9341) e feita editando o User_Setup_Select.h da biblioteca TFT_eSPI
 #include "TFT_eSPI.h"   //Library  TFT_eSPI by Bodmer
 #include "display_tft.h"
+#include "display_touch.h"
 #include "key_input.h"
 #include "Cam_OV7670.h"
 #include "BitcoinWords.h"
@@ -42,19 +113,10 @@ const struct st_font Fonts[FONTS_QTD]={ {FONT1, X_CHAR1, Y_CHAR1},
 
 
 
-#define SCR_MAIN        0
-#define SCR_KEYBOARD    10
-#define SCR_WORDS       20
-#define SCR_CAM         30
-#define SCR_QRCODE      40
-#define SCR_ADDR        50
-#define SCR_SEARCH      60
-
-#define SEARCH_RESULTS_MAX  10
-
 uint16_t scr = SCR_MAIN;
 
 uint16_t displayFont;
+uint16_t displayRotation = 2;
 uint32_t bk_color;
 uint32_t c_color;
 uint32_t hl_bk_color;
@@ -82,24 +144,6 @@ uint16_t lin_selec;
 uint16_t col_selec;
 uint16_t lin_ini;
 uint16_t col_ini;
-
-
-
-void displayDrawCharKey(char c, uint16_t x, uint16_t y, uint16_t highlight);
-
-void scr_main_setup();
-void scr_main_loop();
-void scr_keyboard_setup();
-void scr_keyboard_loop();
-void scr_words_setup();
-void scr_words_loop();
-void scr_search_setup();
-void scr_search_loop();
-void scr_cam_setup();
-void scr_cam_loop();
-void scr_qrcode_setup();
-void scr_qrcode_loop();
-
 
 
 
@@ -171,89 +215,8 @@ void drawStringToImage(uint16_t *img, int16_t w, int16_t h,
   }
 }
 
-#if 0
-
-// Rotation: 0, 1, 2, 3 (same as TFT_eSPI)
-void setPixelRot(uint16_t *img, int16_t w, int16_t h,
-                 int16_t x, int16_t y, uint16_t color, uint8_t rot)
-{
-    int16_t tx, ty;
-    switch(rot & 3) {
-      case 0: // 0 degrees
-        tx = x; ty = y;
-        break;
-      case 1: // 90 degrees
-        tx = h - y - 1; ty = x;
-        break;
-      case 2: // 180 degrees
-        tx = w - x - 1; ty = h - y - 1;
-        break;
-      case 3: // 270 degrees
-        tx = y; ty = w - x - 1;
-        break;
-    }
-    if (tx >= 0 && tx < w && ty >= 0 && ty < h)
-        img[ty * w + tx] = color;
-}
-
-void drawStringToImageRot(uint16_t *img, int16_t imgW, int16_t imgH,
-                          int16_t x, int16_t y, const char *str,
-                          uint16_t color, const GFXfont *font,
-                          uint8_t rot)
-{
-    int16_t cursor_x = x;
-    int16_t cursor_y = y;
-
-    while (*str) {
-        char c = *str++;
-        if (c < font->first || c > font->last) continue;
-
-        GFXglyph *glyph = &font->glyph[c - font->first];
-        uint8_t  *bitmap = font->bitmap;
-
-        uint16_t bo = glyph->bitmapOffset;
-        uint8_t  w  = glyph->width;
-        uint8_t  h  = glyph->height;
-        int8_t   xo = glyph->xOffset;
-        int8_t   yo = glyph->yOffset;
-
-        uint8_t bits = 0, bit = 0;
-        for (uint8_t yy = 0; yy < h; yy++) {
-            for (uint8_t xx = 0; xx < w; xx++) {
-                if (!(bit++ & 7)) bits = bitmap[bo++];
-                if (bits & 0x80) {
-                    int16_t px = cursor_x + xo + xx;
-                    int16_t py = cursor_y + yo + yy;
-                    setPixelRot(img, imgW, imgH, px, py, color, rot);
-                }
-                bits <<= 1;
-            }
-        }
-        // Advance cursor according to rotation
-        switch(rot & 3) {
-          case 0: cursor_x += glyph->xAdvance; break;
-          case 1: cursor_y += glyph->xAdvance; break;
-          case 2: cursor_x -= glyph->xAdvance; break;
-          case 3: cursor_y -= glyph->xAdvance; break;
-        }
-    }
-}
 
 
-
-//drawStringToImageRot(myImage, 240, 240, 20, 50, "HELLO", TFT_YELLOW, &FreeMonoBold12pt7b, 1);
-
-
-
-
-#endif
-
-
-
-
-
-#define KEYB_LINES  4
-#define KEYB_COLS   7
 
 
 // Used for displaying Leter board
@@ -265,70 +228,50 @@ char Letters[KEYB_LINES][KEYB_COLS+1]={"abcdefg",
 
 
 
-
-
-
-
-//============================================================================
-void displayDrawCharKey(char c, uint16_t x, uint16_t y, uint16_t highlight)
-{
-/*
-  char s[20];
-
-  tft.setFreeFont(FONT1);                 // Select the font
-  txt_size = 1;
-  tft.setTextColor(TFT_MAGENTA, TFT_BLACK);
-  tft.setTextSize(txt_size);  //size 1 = 10 pixels, size 2 =20 pixels, and so on
-
-  tft.drawString(vet_char, x * X_CHAR1 * txt_size, y * Y_CHAR1 * txt_size, 1);// Print the string name of the font
-  sprintf(s, "Arjan-5");  //name changed from uSDR Pico FFT
-  tft_writexy_plus(3, TFT_YELLOW, TFT_BLACK, 2,10,1,0,(uint8_t *)s);
-*/
-  //uint16_t font = 10;
-  uint32_t bk_color = TFT_BLUE;
-  uint32_t c_color = TFT_YELLOW;
-  uint32_t hl_bk_color = TFT_YELLOW;
-  uint32_t hl_c_color = TFT_BLUE;
-
-  //tft.setRotation(0);            // Pode ser 0, 1, 2 ou 3, dependendo da orientação desejada
-
-  //tft.setFreeFont(FONT2);                 // Select the font
-  //tft.setTextSize(SIZE2);     
-
-
-
-  if(highlight == 0)
-  {
-    tft.fillRoundRect(x-5, y+5-Fonts[displayFont].height, Fonts[displayFont].width+9, Fonts[displayFont].height+2, 5, bk_color);
-    tft.drawRoundRect(x-5, y+5-Fonts[displayFont].height, Fonts[displayFont].width+9, Fonts[displayFont].height+2, 5, c_color);
-
-    //drawChar(int32_t x, int32_t y, uint16_t c, uint32_t color, uint32_t bg, uint8_t size),
-    //drawChar(x, y, 'A', TFT_YELLOW, TFT_BLACK, 2),
-    tft.setTextColor(c_color, bk_color);
-    tft.drawChar(c, x, y);
-  }
-  else
-  {
-    tft.fillRoundRect(x-5, y+5-Fonts[displayFont].height, Fonts[displayFont].width+9, Fonts[displayFont].height+2, 5, hl_bk_color);
-    //tft.drawRoundRect(x-5, y+5-Fonts[displayFont].height, Fonts[displayFont].width+9, Fonts[displayFont].height+2, 5, hl_c_color);
-
-    //drawChar(int32_t x, int32_t y, uint16_t c, uint32_t color, uint32_t bg, uint8_t size),
-    //drawChar(x, y, 'A', TFT_YELLOW, TFT_BLACK, 2),
-    tft.setTextColor(hl_c_color, hl_bk_color);
-    tft.drawChar(c, x, y);   
-  }
-
-  //tft.drawFastHLine (0, Y_MIN_DRAW, display_WIDTH, TFT_WHITE);
-  //tft.drawPixel(x, y + Y_MIN_DRAW, TFT_RED); 
-  //tft.fillRect((bargraph_X + ((bargraph_dX + bargraph_dX_space) * 0)), bargraph_Y, bargraph_dX, bargraph_dY, Smeter_table_color[0]);
-}
-
-
-
 //============================================================================
 void displayDrawKey(char c, uint16_t col, uint16_t lin, uint16_t highlight)
 {
-  displayDrawCharKey(Letters[lin][col], 12+((col_ini+col)*(Fonts[displayFont].width+11)), ((lin_ini+lin)*(Fonts[displayFont].height+4)), highlight);
+  uint16_t px = 12 + col * (Fonts[displayFont].width  + 11);
+  uint16_t py =        lin * (Fonts[displayFont].height + 4);
+
+  if(highlight == 0)
+  {
+    tft.fillRoundRect(px-5, py+5-Fonts[displayFont].height, Fonts[displayFont].width+9, Fonts[displayFont].height+2, 5, bk_color);
+    tft.drawRoundRect(px-5, py+5-Fonts[displayFont].height, Fonts[displayFont].width+9, Fonts[displayFont].height+2, 5, c_color);
+    tft.setTextColor(c_color, bk_color);
+    tft.drawChar(c, px, py);
+  }
+  else
+  {
+    tft.fillRoundRect(px-5, py+5-Fonts[displayFont].height, Fonts[displayFont].width+9, Fonts[displayFont].height+2, 5, hl_bk_color);
+    //tft.drawRoundRect(x-5, y+5-Fonts[displayFont].height, Fonts[displayFont].width+9, Fonts[displayFont].height+2, 5, hl_c_color);
+    tft.setTextColor(hl_c_color, hl_bk_color);
+    tft.drawChar(c, px, py);   
+  }
+
+//    tft.drawRoundRect(optTouch[i].x, optTouch[i].y, 
+//                      optTouch[i].w, optTouch[i].h, 
+//                      5, TFT_RED);
+
+  if(isTouch == true)   //define touch option on this scr 
+  {
+    if(numTouch < NUM_MAX_TOUCH_OPTIONS) 
+    {
+      optTouch[numTouch].x = px;
+      //ajuste por causa da posicao que a biblioteca desenha o caracter, nao e em x,y exatamente, 
+      //tem um yoffset e x offset (e sao negativos)
+      //optTouch[numTouch].y = py + Fonts[displayFont].font->glyph[c - Fonts[displayFont].font->first].yOffset;
+      //obs.:    PROGMEM no RP2040 é no-op (memória unificada), acesso direto ok. Se um dia rodar em AVR, use pgm_read_byte(&g->yOffset).
+      //optTouch[numTouch].y = py - (Fonts[displayFont].height * 3)/4; //Fonts[displayFont].font->glyph[c - displayFont].font->first].yOffset; 
+      optTouch[numTouch].y = py + 9 - Fonts[displayFont].height;
+      optTouch[numTouch].w = Fonts[displayFont].width;
+      optTouch[numTouch].h = Fonts[displayFont].height;
+      optTouch[numTouch].col = col;
+      optTouch[numTouch].lin = lin;
+      numTouch++;
+    }
+    isTouch = false;  //touch defined
+  }
 }
 
 
@@ -345,10 +288,10 @@ uint16_t str_len(const char*s)
 //============================================================================
 void displayDrawWordKey_xy(const char *s, uint16_t x, uint16_t y, uint16_t highlight)
 {
-  uint32_t bk_color = TFT_BLUE;
-  uint32_t c_color = TFT_YELLOW;
-  uint32_t hl_bk_color = TFT_YELLOW;
-  uint32_t hl_c_color = TFT_BLUE;
+  //uint32_t bk_color = TFT_BLUE;
+  //uint32_t c_color = TFT_YELLOW;
+  //uint32_t hl_bk_color = TFT_YELLOW;
+  //uint32_t hl_c_color = TFT_BLUE;
 
   uint16_t len = str_len(s);
 
@@ -395,6 +338,21 @@ void displayDrawWordKey_xy(const char *s, uint16_t x, uint16_t y, uint16_t highl
 void displayDrawWordKey(const char *s, uint16_t col, uint16_t lin, uint16_t highlight)
 {
   displayDrawWordKey_xy(s, (col*(Fonts[displayFont].width+11)), (lin*(Fonts[displayFont].height+4)), highlight);
+
+  if(isTouch == true)   //define touch option (Back/OK/Search buttons)
+  {
+    if(numTouch < NUM_MAX_TOUCH_OPTIONS)
+    {
+      optTouch[numTouch].x   = (col*(Fonts[displayFont].width+11))-5;
+      optTouch[numTouch].y   = (lin*(Fonts[displayFont].height+4))+9-Fonts[displayFont].height;
+      optTouch[numTouch].w   = (Fonts[displayFont].width*str_len(s))+9;
+      optTouch[numTouch].h   = Fonts[displayFont].height+3;
+      optTouch[numTouch].col = col;
+      optTouch[numTouch].lin = lin;
+      numTouch++;
+    }
+    isTouch = false;  //touch defined
+  }
 }
 
 
@@ -412,10 +370,10 @@ void displayCursor(uint16_t col, uint16_t lin, uint16_t on_off)
 //============================================================================
 void displayDrawWord_xy(const char *s, uint16_t x, uint16_t y, uint16_t highlight)
 {
-  uint32_t bk_color = TFT_BLUE;
-  uint32_t c_color = TFT_YELLOW;
-  uint32_t hl_bk_color = TFT_YELLOW;
-  uint32_t hl_c_color = TFT_BLUE;
+  //uint32_t bk_color = TFT_BLUE;
+  //uint32_t c_color = TFT_YELLOW;
+  //uint32_t hl_bk_color = TFT_YELLOW;
+  //uint32_t hl_c_color = TFT_BLUE;
 
 
   if(highlight == 0)
@@ -453,8 +411,8 @@ void displayDrawWord(const char *s, uint16_t col, uint16_t lin, uint16_t highlig
 //============================================================================
 void displayDrawOpt(const char *s, uint16_t col, uint16_t lin, uint16_t highlight)
 {
-  uint16_t x = col*(Fonts[displayFont].width);  //+11);
-  uint16_t y = lin*(Fonts[displayFont].height);  //+ 4);
+  uint16_t x = col*(Fonts[displayFont].width); 
+  uint16_t y = lin*(Fonts[displayFont].height); 
 
   if(highlight == 0)
   {
@@ -471,7 +429,33 @@ void displayDrawOpt(const char *s, uint16_t col, uint16_t lin, uint16_t highligh
     tft.drawString(s, x, y);
   }
 
+  if(isTouch == true)   //define touch option on this scr 
+  {
+    if(numTouch < NUM_MAX_TOUCH_OPTIONS) 
+    {
+      optTouch[numTouch].x = x;
+      optTouch[numTouch].y = y;
+      optTouch[numTouch].w = strlen(s)*Fonts[displayFont].width;
+      optTouch[numTouch].h = Fonts[displayFont].height;
+      optTouch[numTouch].col = col;
+      optTouch[numTouch].lin = lin;
+      numTouch++;
+    }
+    isTouch = false;  //touch defined
+  }
+
 }
+
+
+//============================================================================
+//Desenha uma string na posicao do grid com cor de texto especifica
+//(fundo bk_color), sem highlight.
+void displayDrawOptColored(const char *s, uint16_t col, uint16_t lin, uint32_t txt_color)
+{
+  tft.setTextColor(txt_color, bk_color);
+  tft.drawString(s, col*(Fonts[displayFont].width), lin*(Fonts[displayFont].height));
+}
+
 
 //============================================================================
 //Desenha a tecla "Back" nas telas words/search com contorno arredondado,
@@ -501,6 +485,21 @@ void displayDrawBackButton(uint16_t col, uint16_t lin, uint16_t highlight)
     tft.drawString(s, x, y);
     tft.drawRoundRect(bx, by, bw, bh, 5, hl_c_color);
   }
+
+  if(isTouch == true)   //define touch option (botao Back)
+  {
+    if(numTouch < NUM_MAX_TOUCH_OPTIONS)
+    {
+      optTouch[numTouch].x = bx;
+      optTouch[numTouch].y = by;
+      optTouch[numTouch].w = bw;
+      optTouch[numTouch].h = bh;
+      optTouch[numTouch].col = col;
+      optTouch[numTouch].lin = lin;
+      numTouch++;
+    }
+    isTouch = false;
+  }
 }
 
 
@@ -508,11 +507,39 @@ void displayDrawBackButton(uint16_t col, uint16_t lin, uint16_t highlight)
 
 
 
-#define MAIN_OPTS  4
-const char MainOpts[MAIN_OPTS][12]=  { "Camera",  "Words", "QR Code", "Address"};
-const uint16_t MainOptsScr[MAIN_OPTS]={ SCR_CAM,  SCR_WORDS, SCR_QRCODE, SCR_ADDR };
+const char MainOpts[MAIN_OPTS][12] =  { "Camera",  "Words", "QR Code", "Address"};
+//const int16_t MainOpts_touch_len[MAIN_OPTS] =  { 6,  5, 7, 7};
+//const uint16_t MainOptsScr[MAIN_OPTS]={ SCR_CAM,  SCR_WORDS, SCR_QRCODE, SCR_ADDR };
 void (*MainOptsFunc[MAIN_OPTS])(void)={ scr_cam_setup,  scr_words_setup, scr_qrcode_setup, scr_addr_setup };
                               
+/*
+#define MAIN_COLS  1
+#define MAIN_LINES 4
+#define MAIN_LINES_INI  2
+#define MAIN_FONT  1
+
+//#define FONTS_QTD  4
+struct st_touch
+{
+  uint16_t x;
+  uint16_t width;
+  uint16_t y;
+  uint16_t height;
+};
+const uint16_t MainTouchOpts[MAIN_LINES * MAIN_COLS] = 
+
+[MAIN_OPTS]
+text
+lin
+col
+  uint16_t x = col*(Fonts[displayFont].width);  //+11);
+  uint16_t y = lin*(Fonts[displayFont].height);  //+ 4);
+
+keyboard
+  x = 12+((col_ini+col)*(Fonts[displayFont].width+11)), 
+  y = ((lin_ini+lin)*(Fonts[displayFont].height+4)), highlight);
+
+*/
 
 //============================================================================
 void scr_main_setup()
@@ -530,7 +557,8 @@ se tela = SCR_MAIN
   hl_bk_color = TFT_YELLOW;
   hl_c_color = TFT_BLUE;
   displayFont = 1;
-  tft.setRotation(0);           // Pode ser 0, 1, 2 ou 3, dependendo da orientação desejada
+  displayRotation = 2;
+  tft.setRotation(displayRotation);           // Pode ser 0, 1, 2 ou 3, dependendo da orientação desejada
   tft.setFreeFont(Fonts[displayFont].font);      // Select the font
   tft.fillScreen(bk_color);            // Preenche a tela
 
@@ -539,16 +567,28 @@ se tela = SCR_MAIN
   lin_ini = 2;
   col_ini = 0;
 
+  numTouch = 0;   //new scr starts with no touch areas
   displayDrawOpt("PicoSigner", 0, 0, 0);
 
   for(uint16_t lin=0; lin<MAIN_OPTS; lin++)
-      displayDrawOpt(MainOpts[lin], col_ini, lin_ini+lin, 0);
+  {
+    isTouch = true;   //define each touch option on this scr 
+    displayDrawOpt(MainOpts[lin], col_ini, lin_ini+lin, 0);
+  }
 
   displayDrawOpt(MainOpts[lin_selec], col_ini, lin_ini+lin_selec, 1);
+  touch_area();   //desenha uma borda de cada area de toque desta tela
 }
 //============================================================================
 void scr_main_loop()
 {
+  int16_t tx, ty;
+  if(touch_edge(&tx, &ty))
+  {
+    touch_main(tx, ty);
+    return;
+  }
+
   uint16_t tec = trata_teclas();
   if(tec<NUM_SWITCHES)
   {
@@ -584,9 +624,6 @@ void scr_main_loop()
 
 }
 
-#define KEY_BACK  "Back"
-#define KEY_OK    "OK"
-#define KEY_SEARCH  "Search"
 
 
 //============================================================================
@@ -622,7 +659,8 @@ se tela = SCR_KEYBOARD
   hl_bk_color = TFT_YELLOW;
   hl_c_color = TFT_BLUE;
   displayFont = 1;
-  tft.setRotation(0);           // Pode ser 0, 1, 2 ou 3, dependendo da orientação desejada
+  displayRotation = 2;
+  tft.setRotation(displayRotation);           // Pode ser 0, 1, 2 ou 3, dependendo da orientação desejada
   tft.setFreeFont(Fonts[displayFont].font);      // Select the font
   tft.fillScreen(bk_color);            // Preenche a tela
 
@@ -631,11 +669,15 @@ se tela = SCR_KEYBOARD
   lin_ini = 3;
   col_ini = 0;
 
+  numTouch = 0;   //new scr starts with no touch areas
+
   for(uint16_t col=0; col<KEYB_COLS; col++)
     for(uint16_t lin=0; lin<KEYB_LINES; lin++)
-      displayDrawKey(Letters[lin][col], col, lin, 0);
-
-  displayDrawKey(Letters[lin_selec][col_selec], col_selec, lin_selec, 1);
+    {
+      isTouch = true;   //define each touch option on this scr 
+      displayDrawKey(Letters[lin][col], col_ini+col, lin_ini+lin, 0);
+    }
+  displayDrawKey(Letters[lin_selec][col_selec], col_ini+col_selec, lin_ini+lin_selec, 1);
 
 /*
 falta uma linha para ir colocando a palavra digitada
@@ -676,13 +718,25 @@ a cada letra, procura em BtcWords por uma palavra possivel
   displayCursor(1+words_selec_len, 1, 1);
 */
   displayDrawEdit();
+  isTouch = true;   //define each touch option on this scr 
   displayDrawWordKey(KEY_BACK, 1, lin_ini+KEYB_LINES, 0);
+  isTouch = true;   //define each touch option on this scr 
   displayDrawWordKey(KEY_OK, 5, lin_ini+KEYB_LINES, 0);
+  isTouch = true;   //define each touch option on this scr 
   displayDrawWordKey(KEY_SEARCH, 2, lin_ini+KEYB_LINES+1, 0);
+
+  touch_area();   //desenha uma borda de cada area de toque desta tela
 }
 //============================================================================
 void scr_keyboard_loop()
 {
+  int16_t tx, ty;
+  if(touch_edge(&tx, &ty))
+  {
+    touch_keyboard(tx, ty);
+    return;
+  }
+
   uint16_t tec = trata_teclas();
   if(tec<NUM_SWITCHES)
   {
@@ -691,9 +745,9 @@ void scr_keyboard_loop()
       case 0:   //"Left"
         if((lin_selec<KEYB_LINES) && (col_selec>0))
         {
-          displayDrawKey(Letters[lin_selec][col_selec], col_selec, lin_selec, 0);
+          displayDrawKey(Letters[lin_selec][col_selec], col_ini+col_selec, lin_ini+lin_selec, 0);
           col_selec--;
-          displayDrawKey(Letters[lin_selec][col_selec], col_selec, lin_selec, 1);
+          displayDrawKey(Letters[lin_selec][col_selec], col_ini+col_selec, lin_ini+lin_selec, 1);
         }
         else if((lin_selec==KEYB_LINES) && (col_selec==1))
         {
@@ -705,9 +759,9 @@ void scr_keyboard_loop()
       case 1:   //"Up"
         if((lin_selec<KEYB_LINES) && (lin_selec>0))
         {
-          displayDrawKey(Letters[lin_selec][col_selec], col_selec, lin_selec, 0);
+          displayDrawKey(Letters[lin_selec][col_selec], col_ini+col_selec, lin_ini+lin_selec, 0);
           lin_selec--;
-          displayDrawKey(Letters[lin_selec][col_selec], col_selec, lin_selec, 1);
+          displayDrawKey(Letters[lin_selec][col_selec], col_ini+col_selec, lin_ini+lin_selec, 1);
         }   
         else if(lin_selec==KEYB_LINES+1)
         {
@@ -731,19 +785,19 @@ void scr_keyboard_loop()
             displayDrawWordKey(KEY_OK, 5, lin_ini+KEYB_LINES, 0);
             col_selec = 4;
           }
-          displayDrawKey(Letters[lin_selec][col_selec], col_selec, lin_selec, 1);
+          displayDrawKey(Letters[lin_selec][col_selec], col_ini+col_selec, lin_ini+lin_selec, 1);
         }   
         break;
       case 2:   //"Down"
         if(lin_selec<KEYB_LINES-1)
         {
-          displayDrawKey(Letters[lin_selec][col_selec], col_selec, lin_selec, 0);
+          displayDrawKey(Letters[lin_selec][col_selec], col_ini+col_selec, lin_ini+lin_selec, 0);
           lin_selec++;
-          displayDrawKey(Letters[lin_selec][col_selec], col_selec, lin_selec, 1);
+          displayDrawKey(Letters[lin_selec][col_selec], col_ini+col_selec, lin_ini+lin_selec, 1);
         }
         else if(lin_selec==KEYB_LINES-1)
         {
-          displayDrawKey(Letters[lin_selec][col_selec], col_selec, lin_selec, 0);
+          displayDrawKey(Letters[lin_selec][col_selec], col_ini+col_selec, lin_ini+lin_selec, 0);
           lin_selec++;
           if(col_selec < 4) col_selec = 0;  else col_selec = 1;
           if(col_selec==0)
@@ -764,9 +818,9 @@ void scr_keyboard_loop()
       case 3:   //"Right"
         if((lin_selec<KEYB_LINES) && (col_selec<KEYB_COLS-1))
         {
-          displayDrawKey(Letters[lin_selec][col_selec], col_selec, lin_selec, 0);
+          displayDrawKey(Letters[lin_selec][col_selec], col_ini+col_selec, lin_ini+lin_selec, 0);
           col_selec++;
-          displayDrawKey(Letters[lin_selec][col_selec], col_selec, lin_selec, 1);
+          displayDrawKey(Letters[lin_selec][col_selec], col_ini+col_selec, lin_ini+lin_selec, 1);
         }      
         else if((lin_selec==KEYB_LINES) && (col_selec==0))
         {
@@ -810,15 +864,38 @@ void scr_keyboard_loop()
             //uint16_t BtcW_len = str_len(BtcWords[BtcW_pos]);
             //if(BtcW_len > words_selec_len)              
             //scr_main_setup();
+            bool copied = false;   //palavra aceita/copiada ou enviada p/ Search
             if(str_len(Words_selec)>0)  //some word
             {
               uint16_t BtcW_pos = SearchBtcWords(Words_selec);
               if(BtcW_pos < BTCWORDS_NUM)  //found similar
               {
-                strcpy(Words[words_selec_num], BtcWords[BtcW_pos]); //copy the find
+                //12a palavra: so aceita se fechar o checksum. Se nao fechar,
+                //vai para a tela Search, que so oferece palavras validas
+                //(mesma regra do projeto BtcWords).
+                if(words_selec_num == WORDS_NUM-1)
+                {
+                  const char *first11[WORDS_NUM-1];
+                  for(uint16_t i=0; i<WORDS_NUM-1; i++) first11[i] = Words[i];
+                  if(bip39_last_word_checksum_ok(first11, BtcWords[BtcW_pos]) == 1)
+                  {
+                    strcpy(Words[words_selec_num], BtcWords[BtcW_pos]); //copy the find
+                    scr_words_setup();
+                  }
+                  else
+                    scr_search_setup();   //escolher uma palavra com checksum valido
+                  copied = true;
+                }
+                else
+                {
+                  strcpy(Words[words_selec_num], BtcWords[BtcW_pos]); //copy the find
+                  scr_words_setup();
+                  copied = true;
+                }
               }
             }
-            scr_words_setup();
+            if(!copied)
+              scr_words_setup();
           }
         } 
         else if(lin_selec==KEYB_LINES+1)
@@ -853,13 +930,130 @@ void scr_keyboard_loop()
 
 
 //============================================================================
+// Acao/tecla escolhida por touch no teclado.
+// col/lin sao a POSICAO de grade na tela (já incluem col_ini/lin_ini),
+// como registrado em optTouch pelas funcoes de desenho. Aqui sao convertidos
+// para o indice de conteudo (idx_col/idx_lin):
+//   0..KEYB_LINES-1  -> letra do grid Letters[idx_lin][idx_col]
+//   KEYB_LINES       -> Back (idx_col 1) / OK (idx_col 5)
+//   KEYB_LINES+1     -> Search
+void tft_keyboard_touch(uint16_t col, uint16_t lin)
+{
+  uint16_t idx_col = col - col_ini;   //posicao na tela -> indice de conteudo
+  uint16_t idx_lin = lin - lin_ini;
+
+  if(idx_lin < KEYB_LINES)
+  {
+    if((idx_lin == KEYB_LINES-1) && (idx_col == KEYB_COLS-2))     //space (_ / <)
+    {
+      //do not use space
+    }
+    else if((idx_lin == KEYB_LINES-1) && (idx_col == KEYB_COLS-1))  //Backspace <
+    {
+      if(words_selec_len > 0)
+      {
+        words_selec_len--;
+        Words_selec[words_selec_len] = 0;
+        displayDrawEdit();
+      }
+    }
+    else if(words_selec_len < BTCWORDS_MAX_LEN)
+    {
+      Words_selec[words_selec_len] = Letters[idx_lin][idx_col];
+      words_selec_len++;
+      displayDrawEdit();
+    }
+  }
+  else if(idx_lin == KEYB_LINES)
+  {
+    if(idx_col == 1)            //Back
+    {
+      scr_words_setup();    //come back without change
+    }
+    else                    //OK
+    {
+      bool copied = false;  //palavra aceita/copiada ou enviada p/ Search
+      if(str_len(Words_selec) > 0)  //some word
+      {
+        uint16_t BtcW_pos = SearchBtcWords(Words_selec);
+        if(BtcW_pos < BTCWORDS_NUM)  //found similar
+        {
+          //12a palavra: so aceita se fechar o checksum. Se nao fechar,
+          //vai para a tela Search, que so oferece palavras validas
+          if(words_selec_num == WORDS_NUM-1)
+          {
+            const char *first11[WORDS_NUM-1];
+            for(uint16_t i=0; i<WORDS_NUM-1; i++) first11[i] = Words[i];
+            if(bip39_last_word_checksum_ok(first11, BtcWords[BtcW_pos]) == 1)
+            {
+              strcpy(Words[words_selec_num], BtcWords[BtcW_pos]); //copy the find
+              scr_words_setup();
+            }
+            else
+              scr_search_setup();   //escolher uma palavra com checksum valido
+            copied = true;
+          }
+          else
+          {
+            strcpy(Words[words_selec_num], BtcWords[BtcW_pos]); //copy the find
+            scr_words_setup();
+            copied = true;
+          }
+        }
+      }
+      if(!copied)
+        scr_words_setup();
+    }
+  }
+  else if(idx_lin == KEYB_LINES+1)   //Search
+  {
+    if(str_len(Words_selec) > 0)
+      scr_search_setup();
+  }
+}
+
+
+//============================================================================
+//1 se as 12 palavras digitadas fecham o checksum BIP-39, 0 caso contrario.
+int words_chksum_ok(void)
+{
+  const char *words12[WORDS_NUM];
+  for(uint16_t i=0; i<WORDS_NUM; i++)
+    words12[i] = Words[i];
+  return bip39_words_checksum_ok(words12);
+}
+
+//============================================================================
 void drawWordLin(uint16_t hl)
 {
+  bool reg = isTouch;   //quem chamou pede para registrar a linha como area de toque
+  isTouch = false;      //as chamadas de displayDrawOpt abaixo nao registram areas parciais
+
   char s[5] = " 0-";
   if(lin_selec<9) { s[0]=' ';  s[1]='1'+lin_selec;  } 
   else            { s[0]='1';  s[1]='0'+lin_selec-9; }
   displayDrawOpt(s, 0, lin_ini+lin_selec, hl);
-  displayDrawOpt(Words[lin_selec], col_ini, lin_ini+lin_selec, hl);
+
+  //12a palavra em vermelho quando as 12 palavras nao fecham o checksum
+  if((lin_selec == WORDS_NUM-1) && (hl == 0) && (words_chksum_ok() != 1))
+    displayDrawOptColored(Words[lin_selec], col_ini, lin_ini+lin_selec, TFT_RED);
+  else
+    displayDrawOpt(Words[lin_selec], col_ini, lin_ini+lin_selec, hl);
+
+  if(reg)   //area de toque = linha inteira (indice + palavra)
+  {
+    if(numTouch < NUM_MAX_TOUCH_OPTIONS)
+    {
+      optTouch[numTouch].x = 0;
+      optTouch[numTouch].y = (lin_ini+lin_selec)*Fonts[displayFont].height;
+      optTouch[numTouch].w = (col_ini + str_len(Words[lin_selec]))*Fonts[displayFont].width;
+      optTouch[numTouch].h = Fonts[displayFont].height;
+      optTouch[numTouch].col = 0;
+      optTouch[numTouch].lin = lin_ini+lin_selec;
+      numTouch++;
+    }
+  }
+  isTouch = false;
 }
 
 //============================================================================
@@ -879,20 +1073,30 @@ se tela = SCR_WORDS
   lin_ini = 1;
   col_ini = 3;
 
+  numTouch = 0;   //new scr starts with no touch areas
   displayDrawOpt("PassWords", 3, 0, 0);
 
   for(lin_selec=0; lin_selec<WORDS_NUM; lin_selec++)
   {
+    isTouch = true;   //define each touch option on this scr 
     drawWordLin(0);
   }
   lin_selec = 0;
   drawWordLin(1);
+  isTouch = true;   //define each touch option on this scr 
   displayDrawBackButton(2, lin_ini+WORDS_NUM, 0);
-
+  touch_area();   //desenha uma borda de cada area de toque desta tela
 }
 //============================================================================
 void scr_words_loop()
 {
+  int16_t tx, ty;
+  if(touch_edge(&tx, &ty))
+  {
+    touch_words(tx, ty);
+    return;
+  }
+
   uint16_t tec = trata_teclas();
   if(tec<NUM_SWITCHES)
   {
@@ -964,11 +1168,29 @@ void scr_words_loop()
 //============================================================================
 void drawSearchLin(uint16_t hl)
 {
+  bool reg = isTouch;   //quem chamou pede para registrar a linha como area de toque
+  isTouch = false;      //as chamadas de displayDrawOpt abaixo nao registram areas parciais
+
   char s[5] = " 0-";
   if(lin_selec<9) { s[0]=' ';  s[1]='1'+lin_selec;  }
   else            { s[0]='1';  s[1]='0'+lin_selec-9; }
   displayDrawOpt(s, 0, lin_ini+lin_selec, hl);
   displayDrawOpt(SearchResults[lin_selec], col_ini, lin_ini+lin_selec, hl);
+
+  if(reg)   //area de toque = linha inteira (indice + palavra)
+  {
+    if(numTouch < NUM_MAX_TOUCH_OPTIONS)
+    {
+      optTouch[numTouch].x = 0;
+      optTouch[numTouch].y = (lin_ini+lin_selec)*Fonts[displayFont].height;
+      optTouch[numTouch].w = (col_ini + str_len(SearchResults[lin_selec]))*Fonts[displayFont].width;
+      optTouch[numTouch].h = Fonts[displayFont].height;
+      optTouch[numTouch].col = 0;
+      optTouch[numTouch].lin = lin_ini+lin_selec;
+      numTouch++;
+    }
+  }
+  isTouch = false;
 }
 
 //============================================================================
@@ -978,13 +1200,27 @@ void drawSearchLin(uint16_t hl)
 void findSearchResults(const char *input)
 {
   uint16_t in_len = str_len(input);
+  search_results_num = 0;
+  if(in_len == 0) return;   //campo vazio nao gera resultados
+
   int32_t topScore[SEARCH_RESULTS_MAX];
   uint16_t topIdx[SEARCH_RESULTS_MAX];
-  search_results_num = 0;
+
+  //Se esta editando a 12a palavra, so oferece palavras que fechem o checksum
+  //BIP-39 (regra do projeto BtcWords, funcao bip39_valid_last_words).
+  const bool lastWordFilter = (words_selec_num == (WORDS_NUM-1));
+  const char *first11[WORDS_NUM-1];
+  if(lastWordFilter)
+    for(uint16_t i=0; i<WORDS_NUM-1; i++)
+      first11[i] = Words[i];
 
   for(uint16_t i=0; i<BTCWORDS_NUM; i++)
   {
     const char *kw = BtcWords[i];
+
+    if(lastWordFilter && (bip39_last_word_checksum_ok(first11, kw) != 1))
+      continue;   //esta palavra nao fecharia o checksum -> nao oferece
+
     int32_t score = 0;
 
     //(A) prefixo: bonus forte
@@ -1064,7 +1300,10 @@ se tela = SCR_SEARCH
     return;
   }
 */
-  findSearchResults(Words_selec);
+  bk_color = TFT_BLUE;
+  c_color = TFT_GREENYELLOW;
+  hl_bk_color = TFT_GREENYELLOW;
+  hl_c_color = TFT_BLUE;
 
   scr = SCR_SEARCH;
   displayFont = 0;
@@ -1075,11 +1314,21 @@ se tela = SCR_SEARCH
   lin_ini = 2;
   col_ini = 3;
 
+  numTouch = 0;   //new scr starts with no touch areas
   displayDrawOpt("PicoSigner", 3, 0, 0);
   displayDrawOpt("Search", 3, 1, 0);
+  displayDrawOpt("Working...", col_ini, lin_ini, 0);   //aviso enquanto busca
+  isTouch = true;   //define each touch option on this scr 
+  displayDrawBackButton(2, lin_ini+SEARCH_RESULTS_MAX, 0);
+
+  findSearchResults(Words_selec);   //bloqueia, mas o aviso ja esta na tela
+
+  //apaga a area da lista (e o aviso) e desenha os resultados
+  tft.fillRect(0, lin_ini*Fonts[displayFont].height, TFT_WIDTH, SEARCH_RESULTS_MAX*Fonts[displayFont].height, bk_color);
 
   for(lin_selec=0; lin_selec<search_results_num; lin_selec++)
   {
+    isTouch = true;   //define cada linha como area de toque
     drawSearchLin(0);
   }
   if(search_results_num > 0)
@@ -1092,12 +1341,18 @@ se tela = SCR_SEARCH
     lin_selec = 0;
   }
 
-  displayDrawBackButton(2, lin_ini+SEARCH_RESULTS_MAX, 0);
-
+  touch_area();   //desenha uma borda de cada area de toque desta tela
 }
 //============================================================================
 void scr_search_loop()
 {
+  int16_t tx, ty;
+  if(touch_edge(&tx, &ty))
+  {
+    touch_search(tx, ty);
+    return;
+  }
+
   uint16_t tec = trata_teclas();
   if(tec<NUM_SWITCHES)
   {
@@ -1179,11 +1434,15 @@ se tela = SCR_CAM
    fica mostrando a camera
    se tecla, vai para tela 4
 */
-  tft.setRotation(3);           // Pode ser 0, 1, 2 ou 3, dependendo da orientação desejada
+  displayRotation = 1;
+  tft.setRotation(displayRotation);           // Pode ser 0, 1, 2 ou 3, dependendo da orientação desejada
+
   scr = SCR_CAM;
   displayFont = 0;
   tft.setFreeFont(Fonts[displayFont].font);      // Select the font
   tft.setTextColor(TFT_YELLOW);        // one-arg => transparent background
+
+  numTouch = 0;   //new scr starts with no touch areas
 
   //tft.fillScreen(TFT_GREEN);     // Preenche a tela
   //delay(3000);
@@ -1194,6 +1453,17 @@ se tela = SCR_CAM
 //============================================================================
 void scr_cam_loop()
 {
+  int16_t tx, ty;
+  if(touch_edge(&tx, &ty))
+  {
+    //debug temporario
+    //Serial.print("CAM raw touch: x=");
+    //Serial.print(tx); Serial.print(" y=");
+    //Serial.println(ty);
+    touch_cam(tx, ty);
+    return;
+  }
+
   uint16_t tec = trata_teclas();
   if((tec<NUM_SWITCHES)&&(tec!=4))  //left right up or down
   {
@@ -1220,15 +1490,25 @@ se tela = SCR_QRCODE
   hl_bk_color = TFT_WHITE;
   hl_c_color = TFT_BLACK;
   displayFont = 1;
-  tft.setRotation(0);           // Pode ser 0, 1, 2 ou 3, dependendo da orientação desejada
+  displayRotation = 2;
+  tft.setRotation(displayRotation);           // Pode ser 0, 1, 2 ou 3, dependendo da orientação desejada
   //tft.setFreeFont(Fonts[displayFont].font);      // Select the font
   tft.fillScreen(c_color);            // Preenche a tela
+
+  numTouch = 0;   //new scr starts with no touch areas
 
   QRCode_gen_test();
 }
 //============================================================================
 void scr_qrcode_loop()
 {
+  int16_t tx, ty;
+  if(touch_edge(&tx, &ty))
+  {
+    touch_qrcode(tx, ty);
+    return;
+  }
+
   uint16_t tec = trata_teclas();
   if(tec<NUM_SWITCHES)
   {
@@ -1290,7 +1570,8 @@ se tela = SCR_ADDR
   hl_bk_color = TFT_YELLOW;
   hl_c_color = TFT_BLUE;
   displayFont = 3;   //FONT0 (FreeMonoBold9pt7b, 11x16 -> ~21 chars/linha)
-  tft.setRotation(0);
+  displayRotation = 2;
+  tft.setRotation(displayRotation);           // Pode ser 0, 1, 2 ou 3, dependendo da orientação desejada
   tft.setFreeFont(Fonts[displayFont].font);
   tft.setTextSize(1);
   tft.fillScreen(bk_color);
@@ -1298,6 +1579,8 @@ se tela = SCR_ADDR
   uint16_t x0 = 0;
   uint16_t y  = 0;
   const uint16_t ROW = ADDR_ROW_STEP;   //20 px por linha
+
+  numTouch = 0;   //new scr starts with no touch areas
 
   drawTextAt("Address", x0, y, 0); y += ROW;
   drawTextAt("m/84'/0'/0'/0/0", x0, y, 0); y += ROW;
@@ -1392,6 +1675,13 @@ depois 2, e assim por diante.
 //============================================================================
 void scr_addr_loop()
 {
+  int16_t tx, ty;
+  if(touch_edge(&tx, &ty))
+  {
+    touch_addr(tx, ty);
+    return;
+  }
+
   uint16_t tec = trata_teclas();
   if(tec<NUM_SWITCHES)
   {
@@ -1448,7 +1738,7 @@ void display_tft_setup(void)
 */
 
 
-  test_sha256();
+  //test_sha256();
   //QRCode_gen_test();
 }
 
